@@ -139,12 +139,7 @@ PyOrderedDict_New(void)
 #ifdef SHOW_CONVERSION_COUNTS
 	++created;
 #endif
-#ifndef _WIN32
-     /* AvdN: FIXME this gives a linker error on Win XP with VS2003
-	 on not being able to find __PyGC_generation0 for linking 
-	 */
-	_PyObject_GC_TRACK(mp);
-#endif
+	PyObject_GC_Track(mp);
 	return (PyObject *)mp;
 }
 

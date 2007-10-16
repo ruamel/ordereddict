@@ -6,7 +6,7 @@ module1 = Extension('ordereddict',
                    )
 
 setup (name = 'ordereddict',
-       version = '0.2',
+       version = '0.2a',
        description = 'a version of dict that keeps keys in insertion order',
        author = 'Anthon van der Neut',
        author_email = 'anthon@mnt.org',

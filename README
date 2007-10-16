@@ -13,15 +13,6 @@ This module has been tested under
    Ubuntu 6.06, gcc : Python 2.5.1
    Windows XP, Visual Studio 2003: Python 2.5.1 
 
-!!!!!!!!!!! Windows Problem !!!!!!!!!!!!!!!!!!!!
-
-In order for things to link under Visual Studio 2003, I had to 
-#ifdef out the call _PyObject_GC_TRACK. I am not sure why this caused 
-a problem and had hoped that distutils would take care of these kind
-of linker issues. Until this is resolved, or confirmed as a non-issue 
-please do not use this code in anything running for a longer period of 
-time and relying on garbagecollection to operate correctly.
-
 Home/Downloading:
 ============
 
@@ -94,7 +85,6 @@ You can run it with:
 
 ToDo:
 ====
-- resolve _PyObject_GC_TRACK issue on Windows
 - implement slicing 
 - implement a reverse (default False) keyword to dict(), values()
   etc. that will reverse the result. So that
@@ -199,11 +189,14 @@ order of key-value pairs so that comparing files is difficult with
 History:
 ====================================================
 
-0.2 2007-10-16
+0.2a  2007-10-16
+Solved the potential GC problem on Windows 
+
+0.2   2007-10-16
 First release, with some tests, and possible still a GC problem
 with Windows.
 
-0.1
+0.1   2007-10-..
 This version was never released. While testing it I was far in writing
 an email to comp.lang.python about why timing with timeit did seem to
 be memory hungry ....
