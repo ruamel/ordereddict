@@ -1,0 +1,211 @@
+
+The ordereddict module in short:
+================================
+
+This is an implementation of an ordered dictionary with Key Insertion Order 
+(KIO): Updates of values do not affect the position of the key.
+Key/Value Insertion Order, can currently only be achieved by deleting a
+key and adding the key/value pair to the ordereddict.
+
+This module has been tested under
+   Ubuntu 7.04, gcc : Python 2.5.1
+   Ubuntu 7.04, gcc : Python 2.4.4
+   Ubuntu 6.06, gcc : Python 2.5.1
+   Windows XP, Visual Studio 2003: Python 2.5.1 
+
+!!!!!!!!!!! Windows Problem !!!!!!!!!!!!!!!!!!!!
+
+In order for things to link under Visual Studio 2003, I had to 
+#ifdef out the call _PyObject_GC_TRACK. I am not sure why this caused 
+a problem and had hoped that distutils would take care of these kind
+of linker issues. Until this is resolved, or confirmed as a non-issue 
+please do not use this code in anything running for a longer period of 
+time and relying on garbagecollection to operate correctly.
+
+Home/Downloading:
+============
+
+ordereddict's home on the web is at 
+http://www.xs4all.nl/~anthon/Python/ordereddict
+there are also the links where the source can be downloaded
+
+Installation:
+============
+
+   python setup.py install
+
+   for Windows users without a compiler:
+   In the windows .zip file I have included a version of the .pyd file
+   just copy that into your site-packages directory 
+
+Bugreporting:
+============
+
+If you find any problems, please let me know, but also realise that I
+have a spamfilter that catches over 100 emails a day and yours might
+get in there unnoticed. So if there is no response within a few days 
+please try again.
+
+Author:
+=======
+Anthon van der Neut 
+I can reached via email at anthon@mnt.org.
+Home-page: http://www.xs4all.nl/~anthon
+
+Functionality
+=============
+
+ordereddict has all of the functionality of dict() except that you
+cannot pass a normal dict to the initialisation of the ordereddict
+(you can pass a list of two element tuples (such as normaldict.items())
+or another ordereddict). As you probably would expect .keys(), .values(),
+.items(), .iterkeys(), itervalues(), iteritems() and 
+"for i in some_ordereddict" have elements ordered based on the key insertion
+order.
+
+Some methods are slightly changed:
+.popitem() takes an optional argument (defaulting to -1) indicating which 
+key/value pair to return (by default the last one available) 
+
+In addition to that it has some extra methods:
+.reverse()  - reverses the keys in place
+.index(key) - gives an integer value that is the index of the key
+.insert(position, key, value) - this will put a key at a particular position
+   so that afterwards .index(key) == position, if the key was already there
+   the original position (and value) is lost to the new position. This often
+   means moving keys to new positions!
+
+
+Testing:
+=======
+
+testordereddict.py in the test subdirectory has been used to test the module.
+This is best run with py.test (http://codespeak.net/py/dist/test.html)
+   py.test testordereddict.py 
+but if you do not use that (yet),
+   python testordereddict
+can be used to run a large part of the tests as well.
+
+There is a somewhat patched copy of the python lib/Test dictionary testing
+routines included as well, it fails on the _update test however.
+You can run it with:
+   cd test/unit
+   python test_dict.py
+
+ToDo:
+====
+- resolve _PyObject_GC_TRACK issue on Windows
+- implement slicing 
+- implement a reverse (default False) keyword to dict(), values()
+  etc. that will reverse the result. So that
+     some_ordereddict.reverse()
+     keys_in_reverse_order = some_ordereddict.keys()
+     some_ordereddict.reverse()
+  can be written as:
+     keys_in_reverse_order = some_ordereddict.keys(reverse=True)
+- specification of a sorting function for an ordereddict that will be used 
+  to sorting (and keeping sorted) the elements of the dictionary
+- check on the test_update unittest in test_dict.py
+
+ToConsider:
+===========
+
+- setdict/setvalues/setitems method (as per Larosa/Foord)
+- comparing ordereddicts (as per Larsosa/Foord)
+- implement the whole (optionally) using pointers in the DictObject Items
+  (Faster on insertion/deletion, slower on accessing slices, makes
+  implementing algorithms somewhat more difficult)
+- allowing updates/initialisation from dict() when its order is known (as
+  when they have zero/single items)
+- supply a pure Python implementation of exactly the functionality in 
+  ordereddict
+- test on older versions (< 2.4) of Python and make portable (if this can
+  be done without too much clutter) or port.
+- test on the Mac (when I get my G4 powersupply back up and running)
+
+Background information:
+======================
+
+ordereddict is directly derived from Python's own dictobject.c file.
+The extensions and the representation of ordereddicts() are based 
+on Larosa/Foord's excellent pure Python OrderedDict() module 
+(http://www.voidspace.org.uk/python/odict.html).
+
+The implemenation adds a vector of pointers to elements to the basic
+dictionary structure and keeps this vector compact (and in order) so
+indexing is fast. The elements do not know about their position (so
+nothing needs to be updated there if that changes, but then finding an
+items index is expensive.  Insertion/deletion is also relatively
+expensive in that on average half of the vector of pointers needs to
+be memmove-d one position.
+
+Speed:
+=====
+
+Based on some tests with best of 10 iterations of 10000 iterations of various
+functions under Ubuntu 7.10 (see test/timeordereddict.py and test/ta.py):
+
+Results in seconds:
+--------------------------------- dict ordereddict OrderedDict
+empty                             0.017    0.017    0.017 
+create_empty                      0.021    0.022    0.100
+create_five_entry                 0.028    0.029    0.275
+create_26_entry                   0.126    0.132    1.021
+create_676_entry                  3.548    3.738   25.116
+get_keys_from_26_entry            0.137    0.146    1.038
+pop_5_items_26_entry              0.150    0.164    1.364
+pop_26_items_676_entry            5.423    5.791   31.420
+popitem_last_26_entry             0.136    0.148    1.131
+popitem_last_676_entry            3.575    3.769   25.672
+popitem_100_676_entry          --------    3.773   25.433
+walk_26_iteritems              --------    0.473    2.622
+
+
+Results normalised against ordereddict == 1.0
+--------------------------------- dict ordereddict OrderedDict
+empty                             1.007    1.000    1.014
+create_empty                      0.962    1.000    4.530
+create_five_entry                 0.957    1.000    9.494
+create_26_entry                   0.955    1.000    7.743
+create_676_entry                  0.949    1.000    6.720
+get_keys_from_26_entry            0.935    1.000    7.098
+pop_5_items_26_entry              0.910    1.000    8.299
+pop_26_items_676_entry            0.936    1.000    5.425
+popitem_last_26_entry             0.922    1.000    7.655
+popitem_last_676_entry            0.949    1.000    6.811
+popitem_100_676_entry          --------    1.000    6.742
+walk_26_iteritems              --------    1.000    5.546
+
+Why:
+===
+
+Because I am orderly, and because I use ordered dictionaries to
+store key/value information read from some text file quite often.
+Unfortunately comparing those files with diff when written from 
+normal dictionaries often obfucates changes because of the reordering
+of lines.
+I have special routine for YAML files that takes lines like:
+   - key1: val1
+   - key2: val3
+   - key3: 
+       - val3a
+       - val3b
+(i.e. a list of key-value pairs) directly to a single ordered dictionary
+and back. (I find it kind of strange to finally have a structured, 
+human readeable format, format that does not try to preserve the 
+order of key-value pairs so that comparing files is difficult with
+'standard' text tools). 
+
+History:
+====================================================
+
+0.2 2007-10-16
+First release, with some tests, and possible still a GC problem
+with Windows.
+
+0.1
+This version was never released. While testing it I was far in writing
+an email to comp.lang.python about why timing with timeit did seem to
+be memory hungry ....
+and then I realiased ordereddict had a memory leak %-)
+
