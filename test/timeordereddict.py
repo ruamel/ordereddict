@@ -3,7 +3,7 @@
 import timeit
 import sys
 
-import ordereddict
+import _ordereddict
 import odict
 import ta   
 
@@ -16,7 +16,7 @@ print 'loop:', LOOP, 'minof', MINOF
 header = '--------------------------------- dict ordereddict OrderedDict'
 
 def do_time():
-    results = ordereddict.ordereddict()
+    results = _ordereddict.ordereddict()
     print sys.argv
     if len(sys.argv) > 1:
         todo = sys.argv[1:]
@@ -27,13 +27,16 @@ def do_time():
         fun = "%-30s" % (funname.split('_', 1)[1],)
         results[fun] = []
         print fun,
-        for testdict in ("dict", "ordereddict.ordereddict", "odict.OrderedDict"):
-            if testdict == "dict" and "nodict" in funname:
+        for testdict in ("dict", "_ordereddict.ordereddict", "odict.OrderedDict"):
+            if testdict != "_ordereddict.ordereddict" and "ordereddict" in funname:
+                res = None
+                print '--------',
+            elif testdict == "dict" and "nodict" in funname:
                 res = None
                 print '--------',
             else:
                 t = timeit.Timer("ta.timeall(%s).%s()" % (testdict, funname), 
-                             "import ta, ordereddict, odict")
+                             "import ta, _ordereddict, odict")
                 res = min(t.repeat(MINOF, LOOP))
                 print '%8.3f' % (res,),
                 sys.stdout.flush()
@@ -47,7 +50,10 @@ def do_time():
         else:
             print '%8.3f' % (x / y),
         print '   1.000',
-        print '%8.3f' % (z / y)
+        if x is None:
+            print '--------', 
+        else:
+            print '%8.3f' % (z / y)
         
         
         

@@ -3,7 +3,7 @@ if __name__ != "__main__":
     import py
 import string
 
-from ordereddict import ordereddict
+from _ordereddict import ordereddict
 
 class TestOrderedDict(object):
     def __init__(self, nopytest=False):
@@ -19,6 +19,12 @@ class TestOrderedDict(object):
         for index, ch in enumerate(string.lowercase):
             self.z[ch] = index
         self.e = ordereddict()    
+        self.part = ordereddict((('f', 5),('g', 6),('h', 7),('i', 8), ('j', 9)))
+
+    def test_setitems(self):
+        r = self.z
+        r.setitems([('f', 5),('g', 6),('h', 7),('i', 8), ('j', 9)])
+        assert r == self.part
 
     def test_len(self):
         assert len(self.z) == len(string.lowercase)
@@ -65,12 +71,26 @@ class TestOrderedDict(object):
             assert string.lowercase[index] == y[0]
             assert index == y[1]
 
+    def test_items_rev(self):
+        for index, y in enumerate(self.z.items(reverse=True)):
+            i = 25 - index
+            assert string.lowercase[i] == y[0]
+            assert i == y[1]
+
     def test_keys(self):
         "unlikely to function in a non-ordered dictionary"
         index = 0
         for y in self.z.keys():
             assert self.z[y] == index
             index += 1
+
+    def test_keys_rev(self):
+        "unlikely to function in a non-ordered dictionary"
+        index = 25
+        for y in self.z.keys(reverse=True):
+            assert string.lowercase[index] == y
+            index -= 1
+
 
     def test_update(self):
         y = ordereddict()
@@ -99,6 +119,12 @@ class TestOrderedDict(object):
         for y in self.z.values():
             assert y == index
             index += 1
+
+    def test_values_rev(self):
+        index = 25
+        for y in self.z.values(reverse=True):
+            assert y == index
+            index -= 1
 
     def test_get1(self):
         assert self.x.get('b') == 2
@@ -182,6 +208,8 @@ class TestOrderedDict(object):
 
     def test_index(self):
         assert self.x.index('c') == 2
+        if not self.nopytest:
+            py.test.raises(ValueError, "self.x.index('1')")
         
 
 ###################
@@ -209,8 +237,17 @@ class TestOrderedDict(object):
 
     def test_iterkeys(self):
         index = 0
-        for index, y in enumerate(self.z.iterkeys()):
+        for y in self.z.iterkeys():
             assert string.lowercase[index] == y
+            index += 1
+        assert index == 26
+
+    def test_iterkeys_rev(self):
+        index = 0
+        for y in self.z.iterkeys(reverse=True):
+            assert string.lowercase[25 - index] == y
+            index += 1
+        assert index == 26
 
     def test_iterkeys_iterator(self):
         tmp = self.z.iterkeys()
@@ -227,11 +264,27 @@ class TestOrderedDict(object):
         for index, y in enumerate(self.z.itervalues()):
             assert index == y
             
+    def test_itervalues_rev(self):
+        index = 0
+        for y in self.z.itervalues(reverse=True):
+            assert 25 - index == y
+            index += 1
+        assert index == 26
+
     def test_iteritems(self):
         index = 0
         for index, y in enumerate(self.z.iteritems()):
             assert string.lowercase[index] == y[0]
             assert index == y[1]
+
+    def test_iteritems_rev(self):
+        index = 0
+        for y in self.z.iteritems(reverse=True):
+            assert string.lowercase[25-index] == y[0]
+            assert 25 - index == y[1]
+            index += 1
+        assert index == 26
+
 
     def test_repr(self):
         d = ordereddict()
@@ -250,15 +303,153 @@ class TestOrderedDict(object):
         assert len(r) == 5
 
     def test_insert_existing_key_sameplace(self):
-        r = self.z.copy()
+        r = self.z
         pos = r.index('k')
         r.insert(pos, 'k', 42)
         assert r.index('k') == pos
         assert r.get('k') == 42
         assert len(r) == len(string.lowercase)
 
+    def test_reverse(self):
+        r = self.z
+        r.reverse()
+        res = []
+        for index, ch in enumerate(string.lowercase):
+            assert r[ch] == index
+            res.insert(0, ch)
+        assert res == r.keys()
+
+    def test_consequitive_slice(self):
+        r = self.z
+        assert r[5:10] == self.part
+        assert r[-2:] == ordereddict([('y', 24),('z', 25)])
+        assert r[-4:-2] == ordereddict([('w', 22),('x', 23)])
+        assert r[:] == self.z
+        
+    def test_slice(self):
+        r = self.z
+        rp = self.part.copy()
+        rp.reverse()
+        assert r[9:4:-1] == rp
+        assert r[5:25:5] == ordereddict([('f', 5), ('k', 10), ('p', 15), ('u', 20)])
+
+    def test_del_consequitive_slice(self):
+        r = self.z
+        del r[3:24]
+        assert r == ordereddict([('a', 0), ('b', 1), ('c', 2), ('y', 24), ('z', 25)])
+
+    def test_del_non_consequitive_slice(self):
+        r = self.z
+        del r[4:24:2]
+        t = ordereddict()
+        for index, ch in enumerate(string.lowercase):
+            if ch not in 'abcdfhjlnprtvxyz':
+                continue
+            t[ch] = index
+        #print r
+        #print t
+        assert r == t
+
+    def test_del_rev_non_consequitive_slice(self):
+        r = self.z
+        del r[22:3:-2]
+        t = ordereddict()
+        for index, ch in enumerate(string.lowercase):
+            if ch not in 'abcdfhjlnprtvxyz':
+                continue
+            t[ch] = index
+        #print r
+        #print t
+        assert r == t
+
+    def test_ass_consequitive_slice_wrong_size(self):
+        r = self.z
+        if not self.nopytest:
+            py.test.raises(ValueError, "r[10:15] = ordereddict([(1, 0), (2, 1), (3, 2),])")
+
+    def test_ass_consequitive_slice_wrong_type(self):
+        r = self.z
+        if not self.nopytest:
+            py.test.raises(TypeError, "r[10:15] = dict([(1, 0), (2, 1), (3, 2),  (4, 24), (5, 25)])")
+
+    def test_ass_consequitive_slice(self):
+        r = self.z
+        r[10:15] = ordereddict([(1, 0), (2, 1), (3, 2), (4, 24), (5, 25)])
+        assert r[9:16] == ordereddict([('j', 9), (1, 0), (2, 1), (3, 2), 
+                                       (4, 24), (5, 25), ('p', 15)])
+
+    def test_ass_non_consequitive_slice_wrong_size(self):
+        r = self.z
+        if not self.nopytest:
+            py.test.raises(ValueError, "r[10:20:2] = ordereddict([(1, 0), (2, 1), (3, 2),])")
+
+    def test_ass_non_consequitive_slice_wrong_type(self):
+        r = self.z
+        if not self.nopytest:
+            py.test.raises(TypeError, "r[10:20:2] = dict([(1, 0), (2, 1), (3, 2),  (4, 24), (5, 25)])")
+
+    def test_ass_non_consequitive_slice(self):
+        r = self.z
+        r[10:15:2] = ordereddict([(1, 0), (2, 1), (3, 2),])
+        #print r[9:16]
+        #print ordereddict([('j', 9), (1, 0), ('l', 11), (2, 1), 
+        #                               ('n', 13), (3, 2), ('p', 15)])
+        assert r[9:16] == ordereddict([('j', 9), (1, 0), ('l', 11), (2, 1), 
+                                       ('n', 13), (3, 2), ('p', 15)])
+
+    def test_ass_reverse_non_consequitive_slice(self):
+        r = self.z
+        r[14:9:-2] = ordereddict([(3, 2), (2, 1), (1, 0),])
+        assert len(r) == 26
+        #print r[9:16]
+        #print ordereddict([('j', 9), (1, 0), ('l', 11), (2, 1), 
+        #                               ('n', 13), (3, 2), ('p', 15)])
+        assert r[9:16] == ordereddict([('j', 9), (1, 0), ('l', 11), (2, 1), 
+                                       ('n', 13), (3, 2), ('p', 15)])
+        
+        
+    def test_rename(self):
+        self.x.rename('c', 'caaa')
+        assert self.x == ordereddict([('a',1), ('b',2), ('caaa',3), ('d', 4)])
+    
+
+    def test_setvalues(self):
+        r1 = self.z[:5]
+        r2 = self.z[:5]
+        for k in r1:
+            r1[k] = r1[k] + 100
+        r2.setvalues([100, 101, 102, 103, 104])
+        assert r1 == r2
+        if not self.nopytest:
+            py.test.raises(ValueError, "r2.setvalues([100, 101, 102, 103])")
+            py.test.raises(ValueError, "r2.setvalues([100, 101, 102, 103, 104, 105])")
+        # we don't know length upfront
+        r2.setvalues((x for x in [100, 101, 102, 103, 104]))
+        if not self.nopytest:
+            py.test.raises(ValueError, "r2.setvalues((x for x in [100, 101, 102, 103]))")
+            py.test.raises(ValueError, "r2.setvalues((x for x in [100, 101, 102, 103, 104, 105]))")
+
+    def test_setkeys(self):
+        self.x[42] = 'abc' 
+        r1 = self.x.copy()
+        r2 = ordereddict([('d', 4), ('c', 3), ('a', 1), (42, 'abc'), ('b', 2),])
+        r1.setkeys(('d', 'c', 'a', 42, 'b',))
+        assert r1 == r2
+        if not self.nopytest:
+            py.test.raises(KeyError, "r1.setkeys(('d', 'e', 'a', 42, 'b',))")
+            py.test.raises(KeyError, "r1.setkeys(('d', 42, 'a', 42, 'b',))")
+            py.test.raises(ValueError, "r1.setkeys(('d', 'c', 'a', 42, 'b', 'a',))")
+            py.test.raises(ValueError, "r1.setkeys(('g', 'c', 'a', 42,))")
+
+
+    def test_setitems(self):
+        r = self.z
+        r.setitems([('f', 5),('g', 6),('h', 7),('i', 8), ('j', 9)])
+        assert r == self.part
+        
+        
     def test_insert_existing_key_before(self):
-        r = self.z.copy()
+        r = self.z
         pos = r.index('k')
         r.insert(pos-3, 'k', 42)
         assert r.index('k') == pos - 3
@@ -266,7 +457,7 @@ class TestOrderedDict(object):
         assert len(r) == len(string.lowercase)
 
     def test_insert_existing_key_after(self):
-        r = self.z.copy()
+        r = self.z
         pos = r.index('k')
         r.insert(pos+3, 'k', 42)
         assert r.index('k') == pos + 3
@@ -275,35 +466,34 @@ class TestOrderedDict(object):
 
 
     def test_insert_range(self):
-        r = self.x.copy()
-        if not self.nopytest:
-            py.test.raises(IndexError, "r.insert(10, 'ca', 9)")
-            py.test.raises(IndexError, "r.insert(-8, 'ca', 9)")
-            # border case, should we allow insert at len + 1?
-            py.test.raises(IndexError, "r.insert(5, 'ca', 9)")
+        r = ordereddict()
+        r['c'] = 3
+        r.insert(0, 'b', 2)
+        r.insert(-10, 'a', 1)
+        r.insert(3, 'd', 4)
+        r.insert(10, 'e', 5)
+        self.x['e'] = 5
+        assert r == self.x
+
         
-        
-    def test_reverse(self):
-        r = self.z.copy()
-        r.reverse()
-        res = []
-        for index, ch in enumerate(string.lowercase):
-            assert r[ch] == index
-            res.insert(0, ch)
-        assert res == r.keys()
 
 # if py.test is not being used
 def main():
+    total = 0
+    failed = 0
     for func in (f for f in sorted(dir(TestOrderedDict)) if f.startswith('test_')):
+        total += 1
         x = TestOrderedDict(True)
         x.setup_method(True)
-        print '--> %30s' % (func),
+        print '--> %50s' % (func),
         try:
             getattr(x, func)()
         except KeyError:
+            failed += 1
             print 'Failed'
         else:
             print 'Ok'
+    print "Total %d, Failed %d" % (total, failed)            
 
 if __name__ == "__main__":
     main()

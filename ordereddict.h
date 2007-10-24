@@ -31,6 +31,7 @@ extern "C" {
 /*
 There are three kinds of slots in the table:
 
+
 1. Unused.  me_key == me_value == NULL
    Does not hold an active (key, value) pair now and never did.  Unused can
    transition to Active upon key insertion.  This is the only case in which
@@ -53,8 +54,10 @@ meaning otherwise.
 */
 
 #if PY_VERSION_HEX < 0x02050000
-typedef ssize_t		 Py_ssize_t;
-typedef Py_ssize_t	 (*lenfunc)(PyObject *);
+typedef ssize_t			Py_ssize_t;
+typedef Py_ssize_t		(*lenfunc)(PyObject *);
+typedef intintargfunc	ssizessizeargfunc;
+typedef intintobjargproc	ssizessizeobjargproc;
 
 #define PyInt_FromSize_t(A)	  PyInt_FromLong((long) A)
 

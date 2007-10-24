@@ -1,7 +1,7 @@
 
 import sys
 import string
-from ordereddict import ordereddict
+from _ordereddict import ordereddict
 
 def do_empty():
     d = ordereddict()

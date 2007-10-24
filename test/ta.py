@@ -1,7 +1,39 @@
 
 import string
 
-class timeall(object):
+class basetimeall(object):
+    def _create_26_entry(self):
+        x = self.typ()
+        for index, ch in enumerate(string.lowercase):
+            x[ch] = index
+        assert len(x) == 26
+        return x
+    
+class timeall(basetimeall):
+    def __init__(self, typ):
+        self.typ = typ
+
+    def time010_get_keys_from_26_entry(self):
+        x = self._create_26_entry()
+        y = x.keys()
+
+    def time011_walk_keys(self):
+        x = self._create_26_entry()
+        for y in x.keys():
+            pass
+
+    def time012_walk_reverse_keys(self):
+        x = self._create_26_entry()
+        for y in reversed(x.keys()):
+            pass
+
+    def time013ordereddict_walk_keys_reverse(self):
+        x = self._create_26_entry()
+        for y in x.keys(reverse=True):
+            pass
+
+
+class timeall1(object):
     def __init__(self, typ):
         self.typ = typ
 

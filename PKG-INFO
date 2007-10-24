@@ -1,6 +1,6 @@
 Metadata-Version: 1.0
 Name: ordereddict
-Version: 0.2a
+Version: 0.3
 Summary: a version of dict that keeps keys in insertion order
 Home-page: http://www.xs4all.nl/~anthon/ordereddict
 Author: Anthon van der Neut

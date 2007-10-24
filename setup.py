@@ -1,12 +1,12 @@
 
 from distutils.core import setup, Extension
 
-module1 = Extension('ordereddict',
+module1 = Extension('_ordereddict',
                     sources = ['ordereddict.c'],
                    )
 
 setup (name = 'ordereddict',
-       version = '0.2a',
+       version = '0.3',
        description = 'a version of dict that keeps keys in insertion order',
        author = 'Anthon van der Neut',
        author_email = 'anthon@mnt.org',
