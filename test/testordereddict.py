@@ -2,8 +2,11 @@
 if __name__ != "__main__":
     import py
 import string
+import os
+import cPickle
+import random
 
-from _ordereddict import ordereddict
+from _ordereddict import ordereddict, sorteddict
 
 class TestOrderedDict(object):
     def __init__(self, nopytest=False):
@@ -20,11 +23,54 @@ class TestOrderedDict(object):
             self.z[ch] = index
         self.e = ordereddict()    
         self.part = ordereddict((('f', 5),('g', 6),('h', 7),('i', 8), ('j', 9)))
+        #self.revpart = ordereddict((('j', 9),('g', 6),('i', 8),('h', 7), ('f', 5)))
+        self.upperlower = ordereddict([('A', 1), ('a', 2), ('B', 4), ('b', 4)])
 
-    def test_setitems(self):
+    def test_od_setitems(self):
         r = self.z
         r.setitems([('f', 5),('g', 6),('h', 7),('i', 8), ('j', 9)])
         assert r == self.part
+        
+    def test_sd_init_from_seq(self):
+        r = sorteddict((('j', 9),('g', 6),('i', 8),('h', 7), ('f', 5)))
+        assert r == self.part
+        
+    def test_sd_setitems(self):
+        r = sorteddict()
+        r['b'] = 1
+        r['c'] = 2
+        r['d'] = 3
+        r['f'] = 5
+        r['g'] = 6
+        r['h'] = 7
+        r['i'] = 8
+        r['a'] = 0
+        r['j'] = 9
+        r['l'] = 11
+        r['k'] = 10
+        r['m'] = 12
+        r['n'] = 13
+        r['o'] = 14
+        r['p'] = 15
+        r['q'] = 16
+        r['s'] = 18
+        r['v'] = 21
+        r['w'] = 22
+        r['x'] = 23
+        r['y'] = 24
+        r['z'] = 25
+        r['e'] = 4
+        r['r'] = 17
+        r['t'] = 19
+        r['u'] = 20
+        assert r == self.z
+
+    def test_sorted_from_ordered(self):
+        i = self.z.items(reverse=True)
+        random.shuffle(i)
+        i = ordereddict(i)
+        sd = sorteddict(i)
+        assert sd == self.z
 
     def test_len(self):
         assert len(self.z) == len(string.lowercase)
@@ -54,6 +100,22 @@ class TestOrderedDict(object):
         assert x['c'] == 3
         x['c'] = 4
         assert self.x['c'] == 3
+        
+    def test_sd_copy(self):
+        x1 = sorteddict(self.z)
+        x = x1.copy()
+        assert len(x) == 26
+        assert x['c'] == 2
+        x['c'] = 4
+        assert self.x['c'] == 3
+        assert x['c'] == 4
+        
+    def test_sd_lower(self):
+        r = sorteddict(self.upperlower)
+        assert r != self.upperlower
+        assert r.index('a') == 2
+        rl = sorteddict(self.upperlower, key=string.lower)
+        assert rl == self.upperlower
         
     def test_in(self):
         assert 'c' in self.z
@@ -104,6 +166,14 @@ class TestOrderedDict(object):
         assert y.values()[4] == self.x.values()[2]
         assert y.values()[5] == self.x.values()[3]
 
+    def test_sd_fromkeys(self):
+        x = sorteddict.fromkeys([1,2,3,4,5,6])
+        assert len(x) == 6
+        assert x[6] is None
+        x = sorteddict.fromkeys((1,2,3,4,5), 'abc')
+        assert len(x) == 5
+        assert x[5] == 'abc'
+        
     def test_fromkeys(self):
         x = ordereddict.fromkeys([1,2,3,4,5,6])
         assert len(x) == 6
@@ -350,6 +420,16 @@ class TestOrderedDict(object):
         #print t
         assert r == t
 
+    def test_sd_del_consequitive_slice(self):
+        r = sorteddict(self.z)
+        if not self.nopytest:
+            py.test.raises(TypeError, "del r[3:24]")
+
+    def test_sd_del_non_consequitive_slice(self):
+        r = sorteddict(self.z)
+        if not self.nopytest:
+            py.test.raises(TypeError, "del r[4:24:2]")
+
     def test_del_rev_non_consequitive_slice(self):
         r = self.z
         del r[22:3:-2]
@@ -378,6 +458,13 @@ class TestOrderedDict(object):
         assert r[9:16] == ordereddict([('j', 9), (1, 0), (2, 1), (3, 2), 
                                        (4, 24), (5, 25), ('p', 15)])
 
+    def test_sd_ass_consequitive_slice(self):
+        r = sorteddict(self.z)
+        if not self.nopytest:
+            py.test.raises(TypeError, 
+            "r[10:15] = ordereddict([(1, 0), (2, 1), (3, 2), (4, 24), (5, 25)])")
+
+
     def test_ass_non_consequitive_slice_wrong_size(self):
         r = self.z
         if not self.nopytest:
@@ -397,6 +484,11 @@ class TestOrderedDict(object):
         assert r[9:16] == ordereddict([('j', 9), (1, 0), ('l', 11), (2, 1), 
                                        ('n', 13), (3, 2), ('p', 15)])
 
+    def test_sd_ass_non_consequitive_slice(self):
+        r = sorteddict(self.z)
+        if not self.nopytest:
+            py.test.raises(TypeError, "r[10:15:2] = ordereddict([(1, 0), (2, 1), (3, 2),])")
+
     def test_ass_reverse_non_consequitive_slice(self):
         r = self.z
         r[14:9:-2] = ordereddict([(3, 2), (2, 1), (1, 0),])
@@ -411,6 +503,11 @@ class TestOrderedDict(object):
     def test_rename(self):
         self.x.rename('c', 'caaa')
         assert self.x == ordereddict([('a',1), ('b',2), ('caaa',3), ('d', 4)])
+    
+    def test_sd_rename(self):
+        x = sorteddict(self.x)
+        if not self.nopytest:
+            py.test.raises(TypeError, "x.rename('c', 'caaa')")
     
 
     def test_setvalues(self):
@@ -441,6 +538,10 @@ class TestOrderedDict(object):
             py.test.raises(ValueError, "r1.setkeys(('d', 'c', 'a', 42, 'b', 'a',))")
             py.test.raises(ValueError, "r1.setkeys(('g', 'c', 'a', 42,))")
 
+    def test_sd_setkeys(self):
+        x = sorteddict.fromkeys((1,2,3,4,5), 'abc')
+        if not self.nopytest:
+            py.test.raises(TypeError, "x.setkeys((5, 3, 1, 2, 4,))")
 
     def test_setitems(self):
         r = self.z
@@ -475,7 +576,102 @@ class TestOrderedDict(object):
         self.x['e'] = 5
         assert r == self.x
 
+    def test_pickle(self):
+        fname = 'tmpdata.pkl'
+        r = self.z.copy()
+        r[(1,2)] = self.x
+        fp = open(fname, 'wb')
+        cPickle.dump(r, fp)
+        fp.close()
+        s = cPickle.load(open(fname, 'rb'))
+        assert s == r
+        os.remove(fname)
         
+    def test_pickle_kvio(self):
+        fname = 'tmpdata.pkl'
+        r = ordereddict(self.z, kvio=True)
+        fp = open(fname, 'wb')
+        cPickle.dump(r, fp)
+        fp.close()
+        s = cPickle.load(open(fname, 'rb'))
+        assert s == r
+        r['k'] = 42
+        s['k'] = 42
+        assert s == r
+        os.remove(fname)
+        
+
+    def test_sd_pickle(self):
+        fname = 'tmpdata.pkl'
+        r = sorteddict(self.z)
+        fp = open(fname, 'wb')
+        cPickle.dump(r, fp)
+        fp.close()
+        s = cPickle.load(open(fname, 'rb'))
+        assert s == r
+        s['k'] = 10
+        assert s == self.z
+        os.remove(fname)
+
+
+    def test_kvio1(self):
+        r = ordereddict(kvio=True)
+        r.update(self.x)
+        r['b']=42
+        assert r == ordereddict([('a', 1), ('c', 3), ('d', 4), ('b', 42)])
+
+    def test_kvio2(self):
+        r = ordereddict(kvio=True)
+        r.update(self.x)
+        r['b']=2
+        assert r != self.x
+        r.update([('c', 3), ('d', 4)])
+        assert r == self.x
+        
+    def test_kvio_copy(self):
+        r = ordereddict(kvio=True)
+        r.update(self.x)
+        r['b']=2
+        r1 = r.copy()
+        assert r1 != self.x
+        r1.update([('c', 3), ('d', 4)])
+        assert r1 == self.x
+        
+    def test_relax(self):
+        nd = dict(z=1,y=2,w=3,v=4,x=5)
+        if not self.nopytest:
+            py.test.raises(TypeError, "r = ordereddict(nd)")
+        r = ordereddict(nd, relax=True)
+        assert nd.keys() == r.keys()
+        assert nd.values() == r.values()
+
+    def test_relax_class(self):
+        class relaxed_ordereddict(ordereddict):
+            def __init__(self, *args, **kw):
+                kw['relax'] = True
+                ordereddict.__init__(self, *args, **kw)
+        
+        nd = dict(z=1,y=2,w=3,v=4,x=5)
+        r = relaxed_ordereddict(nd)
+        assert nd.keys() == r.keys()
+        assert nd.values() == r.values()
+
+
+    def test_relax_update(self):
+        d = ordereddict()
+        nd = dict(z=1,y=2,w=3,v=4,x=5)
+        if not self.nopytest:
+            py.test.raises(TypeError, "d.update(nd)")
+        d.update(nd, relax=True)
+        assert len(d) == 5
+
+    def _test_order(self):
+        nd = dict(z=1,y=2,w=3,v=4,x=5)
+        r = ordereddict(nd, key=True)
+        assert nd.keys() == r.keys()
+        assert nd.values() == r.values()
+
+
 
 # if py.test is not being used
 def main():

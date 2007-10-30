@@ -6,16 +6,17 @@ module1 = Extension('_ordereddict',
                    )
 
 setup (name = 'ordereddict',
-       version = '0.3',
-       description = 'a version of dict that keeps keys in insertion order',
+       version = '0.4',
+       description = 'a version of dict that keeps keys in insertion/sorted order',
        author = 'Anthon van der Neut',
        author_email = 'anthon@mnt.org',
        url = 'http://www.xs4all.nl/~anthon/ordereddict',
        long_description = """
 A derivation of the pyton dictobject.c module that implements 
-Key Insertion Order (KIO). By that I mean that the insertion order of 
+Key Insertion Order (KIO: the insertion order of 
 new keys is being tracked, updating values of existing keys does not
-change the order.
+change the order), Key Value Insertion Order (KVIO: KIO, but updates change
+order), and Key Sorted Order (KSO: key are kept sorted).
 
 The basic C structure is exented with a pointer to a list of item pointers.
 When a *new* key is added, this list is extended with a pointer to the item.
@@ -33,26 +34,9 @@ order of the item.
 the representation of the ordereddict is the same with Larosa/Foord: 
 "ordereddict([(key1, val1), (key2, val2)])"
 
-Extra functions implemented:
-.index(key) returns the position of key in the ordereddict:
-    for k1 in d.keys():
-        d.popitem(d.index(k1))[0] == k1 
-.reverse() reverses the ordering of keys
-    r = d.copy()
-    r.reverse()
-    keys = r.keys()
-    for index, k in enumerate(reverse(d.keys())):
-        assert keys[index] == k
-    
+support for slices
 
-Extra functions considered:
-- creation option for ordereddict so it will be keeping KVIO
-   (Key Value Insertion Order). That means that an update of a value of an 
-   existing key moves the key to the end of the list.
-   You would have to delete an item first in the current implementation.
-- supporting slices 
-- applying a sort function on keys
-- keeping the keys in a particular order 
+And some more (see README).
  
 """,
        ext_modules = [module1],

@@ -1,22 +1,31 @@
 ordereddict
 
-Version: ordereddict 0.3
+Version: ordereddict 0.4
 Author:  Anthon van der Neut
 Contact: anthon@mnt.org
- Date:   2007-10-24
+ Date:   2007-10-30
 
 The ordereddict module in short
 
 This is an implementation of an ordered dictionary with Key Insertion Order
-(KIO): Updates of values do not affect the position of the key. Key/Value
-Insertion Order, can currently only be achieved by deleting a key and adding
-the key/value pair to the ordereddict.
+(KIO: updates of values do not affect the position of the key), Key Value
+Insertion Order (KVIO, an existing key's position is removed and put at the
+back).
+
+Sorted dictionaries are also provided. Currently only with Key Sorted Order
+(KSO, no sorting function can be specified, nor any function to apply on the
+key before comparison (although that is in the making)).
 
 Usage:
 
 from _ordereddict import ordereddict
+kio = ordereddict()
+kvio = ordereddict(kvio=True)
+# without relax unordered initalisation is not allowed
+d = ordereddict({'a':1, 'b': 2}, relax=True)
+sd = sorteddict({'a':1, 'b': 2}) # sorteddict is always relaxed
 
-please note the underscore which is new in version 0.3
+please note the underscore which is new since version 0.3
 
 This module has been tested under:
 
@@ -57,49 +66,63 @@ unnoticed. So if there is no response within a few days please try again.
 
 Functionality
 
-ordereddict has all of the functionality of dict() except that you cannot pass
-a normal dict to the initialisation of the ordereddict (you can pass a list of
-two element tuples (such as normaldict.items()) or another ordereddict). As you
-probably would expect .keys(), .values(), .items(), .iterkeys(), itervalues(),
-iteritems() and "for i in some_ordereddict" have elements ordered based on the
-key insertion order.
+ordereddict has all of the functionality of dict() except that there is no
+keyword based initialisation and that you cannot pass a normal dict to the
+initialisation of the basic ordereddict (however see the relaxed keyword
+below). sorteddict cannot be initialised from keywords either, but can be
+initialised from normal dict (ie. they are always relaxed).
+
+As you probably would expect .keys(), .values(), .items(), .iterkeys(),
+itervalues(), iteritems() and "for i in some_ordereddict" have elements ordered
+based on the key insertion order (or key value insertion order if kvio is
+specified, or sort order for sorteddict).
+
+ordered/sorteddicts can be pickled.
 
 Some methods have been slightly changed:
 
+  • initialisation of ordereddict takes keywords:
+      □ kvio: if set to True, then move an existing key on update
+      □ relax: if set to True, the ordereddict is relaxed for its life
+        regarding initialisation and/or update from unordered data (read a
+        normal dict).
+  • initialisation of sorteddict takes keyword:
+      □ key: specifies a function to apply on key (e.g. string.lower)
   • .popitem() takes an optional argument (defaulting to -1) indicating which
     key/value pair to return (by default the last one available)
   • .dict()/.values()/.items()/.iterdict()/.itervalues()/.iteritems() all take
     an optional reverse (default False) parameter that gives the list reversed
     order resp. iterates in reverse (the non-iterator can also be done
     relatively efficient with e.g. od.dict().reverse() )
+  • .update(): takes an optional relax=True which allows one time ordereddict
+    update from normal dictionaries regardless of initialisation time relax
+    setting.
 
-In addition to that it has some extra methods:
+In addition to that ordereddict and sorteddict have some extra methods:
+
+  • .index(key) - gives an integer value that is the index of the key
+  • .setkeys()/.setvalues()/.setitems(), work like those in the Larosa/Foord
+    implementation, although they might throw different exceptions: -
+    setvalues' argument must be an itereable that returns the same number of
+    items as the length of the ordereddict - setitems' argument is free in
+    length, it performs a clear and adds the items in order.
+  • slice retrieval for all
+
+and ordereddict only also has:
+
+  • .setkeys(), works like the one in the Larosa/Foord implementation. Argument
+    must be an itereable returning a permutation of the existing keys ( that
+    implies having the same length as the ordereddict)
 
   • .reverse() - reverses the keys in place
 
-  • .index(key) - gives an integer value that is the index of the key
+  • .insert(position, key, value) - this will put a key at a particular
+    position so that afterwards .index(key) == position, if the key was already
+    there the original position (and value) is lost to the new position. This
+    often means moving keys to new positions!
 
   • 
-    .insert(position, key, value) - this will put a key at a particular
-        position
-
-        so that afterwards .index(key) == position, if the key was already
-        there the original position (and value) is lost to the new position.
-        This often means moving keys to new positions!
-
-  • .setkeys()/.setvalues()/.setitems(), work like those in the Larosa/Foord
-    implementation, although they might throw different exceptions:
-
-          ☆ setkeys' argument must be an itereable returning a permutation of
-            the existing keys ( that implies having the same length as the
-            ordereddict)
-          ☆ setvalues' argument must be an itereable that returns the same
-            number of items as the length of the ordereddict
-          ☆ setitems' argument is free in length, it performs a clear and adds
-            the items in order.
-
-  • slice retrieval/deletion/assigment
-
+    slice deletion/assigment:
           ☆ stepped deletion could be optimized a bit (individual items are
             deleted which can require memmoving multiple items)
           ☆ assigment only from OrderedDict (with the same length as the
@@ -134,29 +157,29 @@ python test_dict.py
 
 To Do
 
-  • specification of a sorting function for an ordereddict that will be used to
-    sorting (and keeping sorted) the elements of the dictionary (based on key:
-    KSO, value: VSO, item: ISO)
-  • implement KVIO (ie, key moves to the back if newly assigned)
+  • specification of a key rewrite function (such as string.lower) functioning
+    in the same way as somelist.sort(key=string.lower for KSO.
+  • implement Value Sorted Order (VSO: specify value=True for normal value
+    comparison), or a value rewrite function for VSO ( e.g. value=string.lower
+    )
+  • implement Item Sorted Order (ISO): compare value then key ( the other way
+    around would not make sense with unique keys, but we might have non-unique
+    values).
   • check on the test_update unittest in test_dict.py
 
 To Consider
 
-  • comparing ordereddicts (as per Larsosa/Foord)
+  • comparing ordereddicts (as per Larosa/Foord)
   • implement the whole (optionally) using pointers in the DictObject Items
     (Faster on insertion/deletion, slower on accessing slices, makes
     implementing algorithms somewhat more difficult)
-  • allowing updates/initialisation from dict() when its order is known (as
-    when they have zero/single items) or allowing updates/initialisation after
-    some instance flag ('relaxed') has been set. Make default for relaxed
-    global settable. This is for KIO/KVIO only, KSO, VSO, ISO should always be
-    relaxed about what goes in (and accept anything iterable which return 2
-    element items)
   • supply a pure Python implementation of exactly the functionality in
     ordereddict
   • test on older versions (< 2.4) of Python and make portable (if this can be
     done without too much clutter) or port.
   • test on the Mac (when I get my G4 powersupply back up and running)
+  • optimise searching for an item pointer for sorteddict with binary search
+    (for deletion)
 
 Background information
 
@@ -231,15 +254,14 @@ that comparing files is difficult with 'standard' text tools).
 
 History
 
-0.3   2007-10-19
+0.3   2007-10-24
 added setkeys/setvalues/setitems; slice retrieval, deletion, assigment
 .rename(oldkey, newkey) rename a key keeping same value and position
-.index() of non-existing key now returns ValueError instead of
-SystemError
-Made the module name _ordereddict (instead of ordereddict), as Jason
+.index() of non-existing key now returns ValueError instead of SystemError
+Changed the module name to _ordereddict (from ordereddict), as Jason
 Kirstland probably rightfully suggested that any private implementation
-would likely have the (file)name ordereddict.py. The modulename with
-leading underscore seams more common for extension modules anyway.
+likely has the (file)name ordereddict.py. A modulename with leading
+underscore seams more common for extension modules anyway.
 
 0.2a  2007-10-16
 Solved the potential GC problem on Windows

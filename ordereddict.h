@@ -86,7 +86,7 @@ typedef struct {
 /*
 To ensure the lookup algorithm terminates, there must be at least one Unused
 slot (NULL key) in the table.
-The value ma_fill is the number of non-NULL keys (sum of Active and Dummy);
+The value od_fill is the number of non-NULL keys (sum of Active and Dummy);
 ma_used is the number of non-NULL, non-dummy keys (== the number of non-NULL
 values == the number of Active items).
 To avoid slowing down lookups on a near-full table, we resize the table when
@@ -95,7 +95,7 @@ it's two-thirds full.
 typedef struct _ordereddictobject PyOrderedDictObject;
 struct _ordereddictobject {
 	PyObject_HEAD
-	Py_ssize_t ma_fill;  /* # Active + # Dummy */
+	Py_ssize_t od_fill;  /* # Active + # Dummy */
 	Py_ssize_t ma_used;  /* # Active */
 
 	/* The table contains ma_mask + 1 slots, and that's a power of 2.
@@ -113,11 +113,23 @@ struct _ordereddictobject {
 	PyOrderedDictEntry *(*ma_lookup)(PyOrderedDictObject *mp, PyObject *key, long hash);
 	PyOrderedDictEntry ma_smalltable[PyOrderedDict_MINSIZE];
 	/* for small arrays, ordered table pointer points to small array of tables */
-	PyOrderedDictEntry **ma_otablep; 
+	PyOrderedDictEntry **od_otablep; 
 	PyOrderedDictEntry *ma_smallotablep[PyOrderedDict_MINSIZE];
+	/* for storing kvio, relaxed bits */
+    long od_state;
 };
 
+typedef struct _sorteddictobject PySortedDictObject;
+struct _sorteddictobject {
+    struct _ordereddictobject od;
+	PyObject *sd_cmp;
+	PyObject *sd_key;
+	PyObject *sd_value;
+};
+
+
 PyAPI_DATA(PyTypeObject) PyOrderedDict_Type;
+PyAPI_DATA(PyTypeObject) PySortedDict_Type;
 
 #if PY_VERSION_HEX >= 0x02060000
   #define PyOrderedDict_Check(op) \
@@ -126,6 +138,7 @@ PyAPI_DATA(PyTypeObject) PyOrderedDict_Type;
   #define PyOrderedDict_Check(op) PyObject_TypeCheck(op, &PyOrderedDict_Type)
 #endif
 #define PyOrderedDict_CheckExact(op) ((op)->ob_type == &PyOrderedDict_Type)
+#define PySortedDict_CheckExact(op) ((op)->ob_type == &PySortedDict_Type)
 
 PyAPI_FUNC(PyObject *) PyOrderedDict_New(void);
 PyAPI_FUNC(PyObject *) PyOrderedDict_GetItem(PyObject *mp, PyObject *key);
@@ -154,7 +167,7 @@ PyAPI_FUNC(int) PyOrderedDict_Update(PyObject *mp, PyObject *other);
 */
 PyAPI_FUNC(int) PyOrderedDict_Merge(PyObject *mp,
 				   PyObject *other,
-				   int override);
+				   int override, int relaxed);
 
 /* PyOrderedDict_MergeFromSeq2 updates/merges from an iterable object producing
    iterable objects of length 2.  If override is true, the last occurrence

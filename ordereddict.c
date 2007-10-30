@@ -67,6 +67,11 @@ _PyDict_Dummy(void)
 }
 #endif
 
+/* relaxed: allow init etc. of ordereddict from dicts if true */
+static int ordereddict_relaxed = 0;
+/* Key Value Insertion Order: rearrange at end on update if true */
+static int ordereddict_kvio = 0;
+
 /* forward declarations */
 static PyOrderedDictEntry *
 lookdict_string(PyOrderedDictObject *mp, PyObject *key, long hash);
@@ -98,21 +103,39 @@ show_counts(void)
 
 #define INIT_NONZERO_DICT_SLOTS(mp) do {				\
 	(mp)->ma_table = (mp)->ma_smalltable;				\
-	(mp)->ma_otablep = (mp)->ma_smallotablep;           \
+	(mp)->od_otablep = (mp)->ma_smallotablep;           \
 	(mp)->ma_mask = PyOrderedDict_MINSIZE - 1;				\
     } while(0)
 
 #define EMPTY_TO_MINSIZE(mp) do {					\
 	memset((mp)->ma_smalltable, 0, sizeof((mp)->ma_smalltable));	\
 	memset((mp)->ma_smallotablep, 0, sizeof((mp)->ma_smallotablep));	\
-	(mp)->ma_used = (mp)->ma_fill = 0;				\
+	(mp)->ma_used = (mp)->od_fill = (mp)->od_state = 0;				\
 	INIT_NONZERO_DICT_SLOTS(mp);					\
     } while(0)
+
+/* 	(mp)->od_cmp = (mp)->od_key = NULL;				\*/
+
+#define INIT_SORT_FUNCS(SD) do {						\
+	SD->sd_cmp = Py_None; Py_INCREF(Py_None);		\
+	SD->sd_key = Py_None; Py_INCREF(Py_None);		\
+	SD->sd_value = Py_None; Py_INCREF(Py_None);		\
+	} while(0)
+
+
+#define OD_KVIO_BIT		(1<<0)
+#define OD_RELAXED_BIT	(1<<1)
+#define OD_REVERSE_BIT	(1<<2)
+
+#define KVIO(mp)	(mp->od_state & OD_KVIO_BIT)
+#define RELAXED(mp)	(mp->od_state & OD_RELAXED_BIT)
+#define REVERSE(mp)	(mp->od_state & OD_REVERSE_BIT)
 
 /* Dictionary reuse scheme to save calls to malloc, free, and memset */
 #define MAXFREEDICTS 80
 static PyOrderedDictObject *free_dicts[MAXFREEDICTS];
 static int num_free_dicts = 0;
+
 
 PyObject *
 PyOrderedDict_New(void)
@@ -125,12 +148,12 @@ PyOrderedDict_New(void)
 		/* assert (mp->ob_type == &PyOrderedDict_Type); */
 		assert (Py_Type(mp) == &PyOrderedDict_Type);
 		_Py_NewReference((PyObject *)mp);
-		if (mp->ma_fill) {
+		if (mp->od_fill) {
 			EMPTY_TO_MINSIZE(mp);
 		}
 		assert (mp->ma_used == 0);
 		assert (mp->ma_table == mp->ma_smalltable);
-		assert (mp->ma_otablep == mp->ma_smallotablep);
+		assert (mp->od_otablep == mp->ma_smallotablep);
 		assert (mp->ma_mask == PyOrderedDict_MINSIZE - 1);
 	} else {
 		mp = PyObject_GC_New(PyOrderedDictObject, &PyOrderedDict_Type);
@@ -139,6 +162,27 @@ PyOrderedDict_New(void)
 		EMPTY_TO_MINSIZE(mp);
 	}
 	mp->ma_lookup = lookdict_string;
+#ifdef SHOW_CONVERSION_COUNTS
+	++created;
+#endif
+	PyObject_GC_Track(mp);
+	return (PyObject *)mp;
+}
+
+
+PyObject *
+PySortedDict_New(void)
+{
+	register PyOrderedDictObject *mp;
+	register PySortedDictObject *sd;
+	assert(dummy != NULL);
+	mp = (PyOrderedDictObject *) PyObject_GC_New(PySortedDictObject, &PySortedDict_Type);
+	if (mp == NULL)
+		return NULL;
+	EMPTY_TO_MINSIZE(mp);
+	mp->ma_lookup = lookdict_string;
+	sd = (PySortedDictObject*)mp;
+	INIT_SORT_FUNCS(sd);
 #ifdef SHOW_CONVERSION_COUNTS
 	++created;
 #endif
@@ -306,6 +350,50 @@ lookdict_string(PyOrderedDictObject *mp, PyObject *key, register long hash)
 	return 0;
 }
 
+static int
+dump_ordereddict_head(register PyOrderedDictObject *mp)
+{
+	if (mp == NULL) {
+		printf("ordereddict header printing received NULL");
+		return -1;
+	}
+	if (PySortedDict_CheckExact(mp))
+		printf("sorteddict");
+	else
+		printf("ordereddict");
+	printf(": fill %d, ", mp->od_fill);
+	printf("used %d, ", mp->ma_used);
+	printf("mask %d, ", mp->ma_mask);
+	printf("mask %d, ", mp->ma_mask);
+	printf("\nbits: ");
+	if (KVIO(mp))
+		printf("kvio ");
+	if (RELAXED(mp))
+		printf("relax ");
+	if (REVERSE(mp))
+		printf("reverse ");
+	printf("\n");
+	return 0;
+}
+
+static void
+dump_sorteddict_fun(register PySortedDictObject *mp)
+{
+	printf("cmp %p, key %p, value %p\n", mp->sd_cmp, mp->sd_key, mp->sd_value);
+}
+
+
+static void
+dump_otablep(register PyOrderedDictObject *mp)
+{
+	Py_ssize_t index;
+	PyOrderedDictEntry **p;
+	printf("mp %p\n", mp);
+	for (index = 0, p = mp->od_otablep; index < mp->ma_used; index++, p++) {
+		printf("index %d %p %p\n", index, p, *p);
+	}
+}
+
 /*
 Internal routine to insert a new item into the table.
 Used both by the internal resize routine and by the public insert routine.
@@ -331,30 +419,37 @@ insertdict(register PyOrderedDictObject *mp, PyObject *key, long hash,
 	if (ep->me_value != NULL) { /* updating a value */
 		old_value = ep->me_value;
 		ep->me_value = value;
-		if (index >= 0) {
-			for (oindex = 0, epp = mp->ma_otablep; oindex < mp->ma_used; 
+		if (index != -1) {
+			if (index == -2) /* kvio */
+				index = mp->ma_used-1;
+			for (oindex = 0, epp = mp->od_otablep; oindex < mp->ma_used; 
 				oindex++, epp++)
 				if (*epp == ep) 
 					break;
 			/* epp now points to item and oindex is its index (optimize?) */
 			/* if index == oindex we don't have to anything */
 			if (index < oindex) {
-				epp = mp->ma_otablep;
+				epp = mp->od_otablep;
 				epp += index;
 				memmove(epp + 1, epp, (oindex - index) * sizeof(PyOrderedDictEntry *));
 				*epp = ep;
 			} else if (index > oindex) {
+				/*
+				printf("moving %d %d %p\n", index, oindex, epp);
+				dump_otablep(mp); */
 				memmove(epp, epp + 1, (index - oindex) * sizeof(PyOrderedDictEntry *));
-				mp->ma_otablep[index] = ep;
+				mp->od_otablep[index] = ep;
+				/*
+				dump_otablep(mp);
+				*/
 			}
 		}
-		/* XXX AvdN: here we update key to end of otablep if  KVIO */
 		Py_DECREF(old_value); /* which **CAN** re-enter */
 		Py_DECREF(key);
 	}
 	else { /* new value */
 		if (ep->me_key == NULL)
-			mp->ma_fill++;
+			mp->od_fill++;
 		else {
 			assert(ep->me_key == dummy);
 			Py_DECREF(dummy);
@@ -363,14 +458,99 @@ insertdict(register PyOrderedDictObject *mp, PyObject *key, long hash,
 		ep->me_hash = (Py_ssize_t)hash;
 		ep->me_value = value;
 		if (index < 0) 
-			mp->ma_otablep[mp->ma_used] = ep;
+			mp->od_otablep[mp->ma_used] = ep;
 		else {
-			epp = mp->ma_otablep;
+			epp = mp->od_otablep;
 			epp += index;
 			/* make space */
 			memmove(epp + 1, epp, (mp->ma_used - index) * sizeof(PyOrderedDictEntry *));
 			*epp = ep;
 		}
+		mp->ma_used++;
+	}
+	return 0;
+}
+
+static int
+insertsorteddict(register PyOrderedDictObject *mp, PyObject *key, long hash, 
+           PyObject *value)
+{
+	PyObject *old_value;
+	Py_ssize_t index = 0, lower, upper;
+	int res;
+	register PySortedDictObject *sd = (PySortedDictObject *) mp;
+	register PyOrderedDictEntry *ep, **epp = NULL;
+	typedef PyOrderedDictEntry *(*lookupfunc)(PyOrderedDictObject *, PyObject *, long);
+
+	/* printf("insert sorted dict\n"); */
+	assert(mp->ma_lookup != NULL);
+	ep = mp->ma_lookup(mp, key, hash);
+	if (ep == NULL) {
+		Py_DECREF(key);
+		Py_DECREF(value);
+		return -1;
+	}
+	if (ep->me_value != NULL) { /* updating a value */
+		old_value = ep->me_value;
+		ep->me_value = value;
+		Py_DECREF(old_value); /* which **CAN** re-enter */
+		Py_DECREF(key);
+		if (sd->sd_value != Py_None || sd->sd_cmp != Py_None) {
+			PyErr_SetString(PyExc_NotImplementedError, 
+				"updating a value for a cmp/value sorted dict not implemented"
+				);
+			return -1;
+		}
+	}
+	else { /* new value */
+		if (ep->me_key == NULL)
+			mp->od_fill++;
+		else {
+			assert(ep->me_key == dummy);
+			Py_DECREF(dummy);
+		}
+		ep->me_key = key;
+		ep->me_hash = (Py_ssize_t)hash;
+		ep->me_value = value;
+		/* determine epp */
+		epp = mp->od_otablep;
+		lower = 0;
+		upper = mp->ma_used;
+		if (sd->sd_key != Py_None && sd->sd_key != Py_True) {
+			PyObject *transkey;
+			PyObject *chkkey;
+			transkey = PyObject_CallFunctionObjArgs(sd->sd_key, key, NULL);
+			if (transkey == NULL)
+				transkey = key;
+			while (lower < upper) {
+				index = (lower+upper) / 2;
+				chkkey = PyObject_CallFunctionObjArgs(sd->sd_key,(epp[index])->me_key, NULL);
+				if (chkkey == NULL)
+					chkkey = (epp[index])->me_key;
+				res = PyObject_RichCompareBool(chkkey, transkey, Py_GT);
+				if (res == 0) 
+					lower = index + 1;
+				else if (res == 1)
+					upper = index;
+				else
+					return -1; /* res was -1 -> error */
+			}
+		} else {
+			while (lower < upper) {
+				index = (lower+upper) / 2;
+				res = PyObject_RichCompareBool((epp[index])->me_key, key, Py_GT);
+				if (res == 0) 
+					lower = index + 1;
+				else if (res == 1)
+					upper = index;
+				else
+					return -1; /* res was -1 -> error */
+			}
+		}
+		epp += lower;
+		/* make space */
+		memmove(epp + 1, epp, (mp->ma_used - lower) * sizeof(PyOrderedDictEntry *));
+		*epp = ep;
 		mp->ma_used++;
 	}
 	return 0;
@@ -402,11 +582,11 @@ insertdict_clean(register PyOrderedDictObject *mp, PyObject *key, long hash,
 		ep = &ep0[i & mask];
 	}
 	assert(ep->me_value == NULL);
-	mp->ma_fill++;
+	mp->od_fill++;
 	ep->me_key = key;
 	ep->me_hash = (Py_ssize_t)hash;
 	ep->me_value = value;
-	mp->ma_otablep[mp->ma_used] = ep;
+	mp->od_otablep[mp->ma_used] = ep;
 	mp->ma_used++;
 }
 
@@ -440,7 +620,7 @@ dictresize(PyOrderedDictObject *mp, Py_ssize_t minused)
 
 	/* Get space for a new table. */
 	oldtable = mp->ma_table;
-	oldotablep = mp->ma_otablep;
+	oldotablep = mp->od_otablep;
 	assert(oldtable != NULL);
 	assert(oldotablep != NULL);
 	is_oldtable_malloced = oldtable != mp->ma_smalltable;
@@ -450,7 +630,7 @@ dictresize(PyOrderedDictObject *mp, Py_ssize_t minused)
 		newtable = mp->ma_smalltable;
 		newotablep = mp->ma_smallotablep;
 		if (newtable == oldtable) {
-			if (mp->ma_fill == mp->ma_used) {
+			if (mp->od_fill == mp->ma_used) {
 				/* No dummies, so no point doing anything. */
 				return 0;
 			}
@@ -460,7 +640,7 @@ dictresize(PyOrderedDictObject *mp, Py_ssize_t minused)
 			   as lookdict needs at least one virgin slot to
 			   terminate failing searches.  If fill < size, it's
 			   merely desirable, as dummies slow searches. */
-			assert(mp->ma_fill > mp->ma_used);
+			assert(mp->od_fill > mp->ma_used);
 			memcpy(small_copy, oldtable, sizeof(small_copy));
 			memcpy(small_ocopyp, oldotablep, sizeof(small_ocopyp));
 			oldtable = small_copy;
@@ -483,20 +663,20 @@ dictresize(PyOrderedDictObject *mp, Py_ssize_t minused)
 	assert(newtable != oldtable);
 	assert(newotablep != oldotablep);
 	mp->ma_table = newtable;
-	mp->ma_otablep = newotablep;
+	mp->od_otablep = newotablep;
 	mp->ma_mask = newsize - 1;
 	memset(newtable, 0, sizeof(PyOrderedDictEntry) * newsize);
 	memcpy(newotablep, oldotablep, sizeof(PyOrderedDictEntry *) * newsize);
-	epp = mp->ma_otablep;
+	epp = mp->od_otablep;
 	j = mp->ma_used;
 	mp->ma_used = 0;
-	i = mp->ma_fill;
-	mp->ma_fill = 0;
+	i = mp->od_fill;
+	mp->od_fill = 0;
 
 	/* Copy the data over; this is refcount-neutral for active entries;
 	   dummy entries aren't copied over, of course */
 
-	for (epp = mp->ma_otablep; j > 0; epp++, j--) {
+	for (epp = mp->od_otablep; j > 0; epp++, j--) {
 		insertdict_clean(mp, (*epp)->me_key, (long)(*epp)->me_hash,
 					 (*epp)->me_value);
 	}
@@ -578,6 +758,7 @@ PyOrderedDict_GetItem(PyObject *op, PyObject *key)
  * This means that it's safe to loop over a dictionary with PyOrderedDict_Next()
  * and occasionally replace a value -- but you can't insert new keys or
  * remove them.
+ * This does never hold for kvio
  */
 int
 PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
@@ -603,16 +784,19 @@ PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
 		if (hash == -1)
 			return -1;
 	}
-	assert(mp->ma_fill <= mp->ma_mask);  /* at least one empty slot */
+	assert(mp->od_fill <= mp->ma_mask);  /* at least one empty slot */
 	n_used = mp->ma_used;
 	Py_INCREF(value);
 	Py_INCREF(key);
-	if (insertdict(mp, key, hash, value, -1) != 0)
+	if (PySortedDict_CheckExact(op)) {
+		if (insertsorteddict(mp, key, hash, value) != 0)
+			return -1;
+	} else if (insertdict(mp, key, hash, value, KVIO(mp) ? -2: -1) != 0)
 		return -1;
 	/* If we added a key, we can safely resize.  Otherwise just return!
 	 * If fill >= 2/3 size, adjust size.  Normally, this doubles or
 	 * quaduples the size, but it's also possible for the dict to shrink
-	 * (if ma_fill is much larger than ma_used, meaning a lot of dict
+	 * (if od_fill is much larger than ma_used, meaning a lot of dict
 	 * keys have been * deleted).
 	 *
 	 * Quadrupling the size improves average dictionary sparseness
@@ -623,7 +807,7 @@ PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
 	 * Very large dictionaries (over 50K items) use doubling instead.
 	 * This may help applications with severe memory constraints.
 	 */
-	if (!(mp->ma_used > n_used && mp->ma_fill*3 >= (mp->ma_mask+1)*2))
+	if (!(mp->ma_used > n_used && mp->od_fill*3 >= (mp->ma_mask+1)*2))
 		return 0;
 	return dictresize(mp, (mp->ma_used > 50000 ? 2 : 4) * mp->ma_used);
 }
@@ -635,6 +819,11 @@ PyOrderedDict_InsertItem(register PyOrderedDictObject *mp, Py_ssize_t index,
 	register long hash;
 	register Py_ssize_t n_used;
 
+	if (PySortedDict_CheckExact(mp)) {
+		PyErr_SetString(PyExc_TypeError,
+				"sorteddict does not support insert()");
+		return -1;
+	}
 	if (!PyOrderedDict_Check(mp)) {
 		PyErr_BadInternalCall();
 		return -1;
@@ -658,7 +847,7 @@ PyOrderedDict_InsertItem(register PyOrderedDictObject *mp, Py_ssize_t index,
 		if (hash == -1)
 			return -1;
 	}
-	assert(mp->ma_fill <= mp->ma_mask);  /* at least one empty slot */
+	assert(mp->od_fill <= mp->ma_mask);  /* at least one empty slot */
 	n_used = mp->ma_used;
 	Py_INCREF(value);
 	Py_INCREF(key);
@@ -667,7 +856,7 @@ PyOrderedDict_InsertItem(register PyOrderedDictObject *mp, Py_ssize_t index,
 	/* If we added a key, we can safely resize.  Otherwise just return!
 	 * If fill >= 2/3 size, adjust size.  Normally, this doubles or
 	 * quaduples the size, but it's also possible for the dict to shrink
-	 * (if ma_fill is much larger than ma_used, meaning a lot of dict
+	 * (if od_fill is much larger than ma_used, meaning a lot of dict
 	 * keys have been * deleted).
 	 *
 	 * Quadrupling the size improves average dictionary sparseness
@@ -678,7 +867,7 @@ PyOrderedDict_InsertItem(register PyOrderedDictObject *mp, Py_ssize_t index,
 	 * Very large dictionaries (over 50K items) use doubling instead.
 	 * This may help applications with severe memory constraints.
 	 */
-	if (!(mp->ma_used > n_used && mp->ma_fill*3 >= (mp->ma_mask+1)*2))
+	if (!(mp->ma_used > n_used && mp->od_fill*3 >= (mp->ma_mask+1)*2))
 		return 0;
 	return dictresize(mp, (mp->ma_used > 50000 ? 2 : 4) * mp->ma_used);
 }
@@ -688,7 +877,7 @@ static int
 del_inorder(PyOrderedDictObject *op, PyOrderedDictEntry* ep)
 {
 	register Py_ssize_t count = op->ma_used;
-	PyOrderedDictEntry **tmp = op->ma_otablep;
+	PyOrderedDictEntry **tmp = op->od_otablep;
 	while (count--) {
 		if (*tmp == ep) {
 			memmove(tmp, tmp+1, count * sizeof(PyOrderedDictEntry *));
@@ -762,7 +951,7 @@ PyOrderedDict_Clear(PyObject *op)
 #endif
 
 	table = mp->ma_table;
-	otablep = mp->ma_otablep;
+	otablep = mp->od_otablep;
 	assert(table != NULL);
 	assert(otablep != NULL);
 	table_is_malloced = table != mp->ma_smalltable;
@@ -773,7 +962,7 @@ PyOrderedDict_Clear(PyObject *op)
 	 * clearing the slots, and never refer to anything via mp->xxx while
 	 * clearing.
 	 */
-	fill = mp->ma_fill;
+	fill = mp->od_fill;
 	if (table_is_malloced)
 		EMPTY_TO_MINSIZE(mp);
 
@@ -835,7 +1024,7 @@ PyOrderedDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey, PyObject **p
 	register Py_ssize_t i;
 	register PyOrderedDictEntry **epp;
 
-	if (!PyOrderedDict_Check(op))
+	if (!PyOrderedDict_CheckExact(op) && !PySortedDict_CheckExact(op))
 		return 0;
 	i = *ppos;
 	if (i < 0)
@@ -843,7 +1032,7 @@ PyOrderedDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey, PyObject **p
 	if (i >= ((PyOrderedDictObject *)op)->ma_used)
 		return 0;
 	*ppos = i+1;
-	epp = ((PyOrderedDictObject *)op)->ma_otablep;
+	epp = ((PyOrderedDictObject *)op)->od_otablep;
 	if (pkey)
 		*pkey = epp[i]->me_key;
 	if (pvalue)
@@ -885,7 +1074,7 @@ static void
 dict_dealloc(register PyOrderedDictObject *mp)
 {
 	register PyOrderedDictEntry *ep;
-	Py_ssize_t fill = mp->ma_fill;
+	Py_ssize_t fill = mp->od_fill;
  	PyObject_GC_UnTrack(mp);
 	Py_TRASHCAN_SAFE_BEGIN(mp)
 	for (ep = mp->ma_table; fill > 0; ep++) {
@@ -897,7 +1086,7 @@ dict_dealloc(register PyOrderedDictObject *mp)
 	}
 	if (mp->ma_table != mp->ma_smalltable) {
 		PyMem_DEL(mp->ma_table);
-		PyMem_DEL(mp->ma_otablep);
+		PyMem_DEL(mp->od_otablep);
         }
 	if (num_free_dicts < MAXFREEDICTS && Py_Type(mp) == &PyOrderedDict_Type)
 		free_dicts[num_free_dicts++] = mp;
@@ -907,24 +1096,27 @@ dict_dealloc(register PyOrderedDictObject *mp)
 }
 
 static int
-dict_print(register PyOrderedDictObject *mp, register FILE *fp, register int flags)
+ordereddict_print(register PyOrderedDictObject *mp, register FILE *fp, register int flags)
 {
 	register Py_ssize_t i;
 	register Py_ssize_t any;
+	char *typestr = "ordered";
 	int status;
 	PyOrderedDictEntry **epp;
 
+	if (PySortedDict_CheckExact(mp))
+		typestr = "sorted";
 	status = Py_ReprEnter((PyObject*)mp);
 	if (status != 0) {
 		if (status < 0)
 			return status;
-		fprintf(fp, "{...}");
+		fprintf(fp, "%sdict([...])", typestr);
 		return 0;
 	}
 
-	fprintf(fp, "ordereddict([");
+	fprintf(fp, "%sdict([", typestr);
 	any = 0;
-	epp = mp->ma_otablep;
+	epp = mp->od_otablep;
 	for (i = 0; i < mp->ma_used; i++) {
 		PyObject *pvalue = (*epp)->me_value;
 		/* Prevent PyObject_Repr from deleting value during
@@ -954,20 +1146,23 @@ dict_print(register PyOrderedDictObject *mp, register FILE *fp, register int fla
 }
 
 static PyObject *
-dict_repr(PyOrderedDictObject *mp)
+ordereddict_repr(PyOrderedDictObject *mp)
 {
 	Py_ssize_t i;
 	PyObject *s, *temp, *comma = NULL, *rightpar = NULL;
 	PyObject *pieces = NULL, *result = NULL;
 	PyObject *key, *value;
+	char *typestr = "ordered";
 
+	if (PySortedDict_CheckExact(mp))
+		typestr = "sorted";
 	i = Py_ReprEnter((PyObject *)mp);
 	if (i != 0) {
-		return i > 0 ? PyString_FromString("{...}") : NULL;
+		return i > 0 ? PyString_FromFormat("%sdict([...])", typestr) : NULL;
 	}
 
 	if (mp->ma_used == 0) {
-		result = PyString_FromString("ordereddict([])");
+		result = PyString_FromFormat("%sdict([])", typestr);
 		goto Done;
 	}
 
@@ -1005,7 +1200,7 @@ dict_repr(PyOrderedDictObject *mp)
 
 	/* Add "[]" decorations to the first and last items. */
 	assert(PyList_GET_SIZE(pieces) > 0);
-	s = PyString_FromString("ordereddict([");
+	s = PyString_FromFormat("%sdict([", typestr);
 	if (s == NULL)
 		goto Done;
 	temp = PyList_GET_ITEM(pieces, 0);
@@ -1074,7 +1269,7 @@ dict_subscript(PyOrderedDictObject *mp, register PyObject *key)
 		return NULL;
 	v = ep->me_value;
 	if (v == NULL) {
-		if (!PyOrderedDict_CheckExact(mp)) {
+		if (!PyOrderedDict_CheckExact(mp) && !PySortedDict_CheckExact(mp)) {
 			/* Look up __missing__ method if we're a subclass. */
 		    	PyObject *missing;
 			static PyObject *missing_str = NULL;
@@ -1108,7 +1303,12 @@ dict_ass_slice(PyOrderedDictObject *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
 	Py_ssize_t result = -1, i;
 	Py_ssize_t num_to_delete = 0, s;
 	PyOrderedDictEntry **epp;
-
+	
+	if (PySortedDict_CheckExact(self)) {
+		PyErr_Format(PyExc_TypeError,
+				"sorteddict does not support slice %s", value ? "assignment" : "deletion");
+		return -1;
+	}
 	if (ilow < 0)
 		ilow = 0;
 	else if (ilow > self->ma_used)
@@ -1148,7 +1348,7 @@ dict_ass_slice(PyOrderedDictObject *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
 			}
 
 			}
-		epp = self->ma_otablep;
+		epp = self->od_otablep;
 		epp += ilow;
 		for (i = ilow; i < ihigh; i++, epp++) {
 			/* AvdN: ToDo DECREF key and value */
@@ -1158,7 +1358,7 @@ dict_ass_slice(PyOrderedDictObject *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
 			recycle[num_to_delete++] = (*epp)->me_value;
 			(*epp)->me_value = NULL;
 		}
-		epp = self->ma_otablep;
+		epp = self->od_otablep;
 		memmove(epp+ilow, epp+ihigh, (self->ma_used - ihigh) * sizeof(PyOrderedDictEntry *));
 		self->ma_used -= (ihigh - ilow);
 		result = 0;
@@ -1176,7 +1376,7 @@ dict_ass_slice(PyOrderedDictObject *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
 		Py_XDECREF(recycle[i]);
 #if DELETION_AND_OVERWRITING_SEPERATE != 1
 	if (value != NULL) { /* now insert */
-		epp = ((PyOrderedDictObject *) value)->ma_otablep;
+		epp = ((PyOrderedDictObject *) value)->od_otablep;
 		for (i = ilow; i < ihigh; i++) {
 			if(PyOrderedDict_InsertItem(self, i, (*epp)->me_key, (*epp)->me_value) != 0)
 				return -1;
@@ -1195,7 +1395,11 @@ dict_ass_subscript(PyOrderedDictObject *self, PyObject *item, PyObject *value)
 {
 	if (PySlice_Check(item)) {
 		Py_ssize_t start, stop, step, slicelength;
-
+		if (PySortedDict_CheckExact(self)) {
+			PyErr_Format(PyExc_TypeError,
+					"sorteddict does not support slice %s", value ? "assignment" : "deletion");
+			return -1;
+		}
 		if (PySlice_GetIndicesEx((PySliceObject*)item, self->ma_used,
 				 &start, &stop, &step, &slicelength) < 0) {
 			return -1;
@@ -1232,13 +1436,13 @@ dict_ass_subscript(PyOrderedDictObject *self, PyObject *item, PyObject *value)
 			/* printf("Assigning %d %d %d %d %d %p\n", start, stop, step, slicelength, PyObject_Length(value), value); */
 			if  (PyObject_Length(value) != slicelength) {
 				PyErr_SetString(PyExc_ValueError, 
-					"slice assigment: wrong size"
+					"slice assignment: wrong size"
 					);
 				return -1;
 			}
 			if (!PyOrderedDict_CheckExact(value)) {
 				PyErr_SetString(PyExc_TypeError,
-					"slice assigment: argument must be ordereddict"
+					"slice assignment: argument must be ordereddict"
 					);
 				return -1;
 			}
@@ -1254,7 +1458,7 @@ dict_ass_subscript(PyOrderedDictObject *self, PyObject *item, PyObject *value)
 			}
 			count = slicelength;
 			start2 = start;
-			epp = ((PyOrderedDictObject *) value)->ma_otablep;
+			epp = ((PyOrderedDictObject *) value)->od_otablep;
 			if (step < 0) {
 				epp += slicelength;
 			}
@@ -1317,10 +1521,10 @@ dict_keys(register PyOrderedDictObject *mp, PyObject *args, PyObject *kwds)
 		goto again;
 	}
 	if (reverse) {
-		epp = mp->ma_otablep + (n-1);
+		epp = mp->od_otablep + (n-1);
 		reverse = -1;
 	} else {
-		epp = mp->ma_otablep;
+		epp = mp->od_otablep;
 		reverse = 1;
 	}	
 	for (i = 0; i < n; i++) {
@@ -1361,10 +1565,10 @@ dict_values(register PyOrderedDictObject *mp, PyObject *args, PyObject *kwds)
 		goto again;
 	}
 	if (reverse) {
-		epp = mp->ma_otablep + (n-1);
+		epp = mp->od_otablep + (n-1);
 		reverse = -1;
 	} else {
-		epp = mp->ma_otablep;
+		epp = mp->od_otablep;
 		reverse = 1;
 	}	
 	for (i = 0; i < n; i++) {
@@ -1418,10 +1622,10 @@ dict_items(register PyOrderedDictObject *mp, PyObject *args, PyObject *kwds)
 	}
 	/* Nothing we do below makes any function calls. */
 	if (reverse) {
-		epp = mp->ma_otablep + (n-1);
+		epp = mp->od_otablep + (n-1);
 		reverse = -1;
 	} else {
-		epp = mp->ma_otablep;
+		epp = mp->od_otablep;
 		reverse = 1;
 	}	
 	for (i = 0; i < n; i++) {
@@ -1456,7 +1660,7 @@ dict_fromkeys(PyObject *cls, PyObject *args)
 
 
 #if PY_VERSION_HEX >= 0x02050000
-	if (PyOrderedDict_CheckExact(d) && PyAnySet_CheckExact(seq)) {
+	if ((PyOrderedDict_CheckExact(d) || PySortedDict_CheckExact(d)) && PyAnySet_CheckExact(seq)) {
 		PyOrderedDictObject *mp = (PyOrderedDictObject *)d;
 		Py_ssize_t pos = 0;
 		PyObject *key;
@@ -1507,29 +1711,36 @@ Fail:
 	return NULL;
 }
 
+/* called by init, update and setitems */
 static int
-dict_update_common(PyObject *self, PyObject *args, PyObject *kwds, char *methname)
+dict_update_common(PyObject *self, PyObject *args, PyObject *kwds, char *args_name)
 {
 	PyObject *arg = NULL;
-	int result = 0;
+	int result = 0, tmprelax = 0;
+	
+	static char *kwlist[] = {"src", "relax", 0};
 
-	if (!PyArg_UnpackTuple(args, methname, 0, 1, &arg))
-		result = -1;
-	else if (arg != NULL) {
+	if (args != NULL)
+		if (!PyArg_ParseTupleAndKeywords(args, kwds, args_name,
+			kwlist, &arg, &tmprelax))
+			return -1;
+
+	if (arg != NULL) {
 		if (PyObject_HasAttrString(arg, "keys"))
-			result = PyOrderedDict_Merge(self, arg, 1);
+			result = PyOrderedDict_Merge(self, arg, 1, tmprelax);
 		else
 			result = PyOrderedDict_MergeFromSeq2(self, arg, 1);
 	}
-	if (result == 0 && kwds != NULL)
-		result = PyOrderedDict_Merge(self, kwds, 1);
+	/* do not initialise from keywords at all */
+	/* if (result == 0 && kwds != NULL)
+		result = PyOrderedDict_Merge(self, kwds, 1); */
 	return result;
 }
 
 static PyObject *
 dict_update(PyObject *self, PyObject *args, PyObject *kwds)
 {
-	if (dict_update_common(self, args, kwds, "update") != -1)
+	if (dict_update_common(self, args, kwds, "|Oi:update") != -1)
 		Py_RETURN_NONE;
 	return NULL;
 }
@@ -1617,11 +1828,11 @@ Return:
 int
 PyOrderedDict_Update(PyObject *a, PyObject *b)
 {
-	return PyOrderedDict_Merge(a, b, 1);
+	return PyOrderedDict_Merge(a, b, 1, 0);
 }
 
 int
-PyOrderedDict_Merge(PyObject *a, PyObject *b, int override)
+PyOrderedDict_Merge(PyObject *a, PyObject *b, int override, int relaxed)
 {
 	register PyOrderedDictObject *mp, *other;
 	register Py_ssize_t i;
@@ -1637,8 +1848,9 @@ PyOrderedDict_Merge(PyObject *a, PyObject *b, int override)
 		return -1;
 	}
 	mp = (PyOrderedDictObject*)a;
-	if (PyOrderedDict_CheckExact(b)) {
-		other = (PyOrderedDictObject*)b;
+	/* sorted dicts are always done with individual elements */
+	if (!PySortedDict_CheckExact(a) && PyOrderedDict_CheckExact(b)) {
+		other = (PyOrderedDictObject *) b;
 		if (other == mp || other->ma_used == 0)
 			/* a.update(a) or a.update({}); nothing to do */
 			return 0;
@@ -1652,11 +1864,11 @@ PyOrderedDict_Merge(PyObject *a, PyObject *b, int override)
 		 * incrementally resizing as we insert new items.  Expect
 		 * that there will be no (or few) overlapping keys.
 		 */
-		if ((mp->ma_fill + other->ma_used)*3 >= (mp->ma_mask+1)*2) {
+		if ((mp->od_fill + other->ma_used)*3 >= (mp->ma_mask+1)*2) {
 		   if (dictresize(mp, (mp->ma_used + other->ma_used)*2) != 0)
 			   return -1;
 		}
-		epp = other->ma_otablep;
+		epp = other->od_otablep;
 		for (i = 0; i < other->ma_used; i++) {
 			entry = *epp++;
 			/* entry->me_value is never NULL when following the otablep */
@@ -1675,7 +1887,50 @@ PyOrderedDict_Merge(PyObject *a, PyObject *b, int override)
 			}
 		}
 	}
-	else {
+	else if (relaxed || RELAXED(mp)) {
+		/* Do it the generic, slower way */
+		PyObject *keys = PyMapping_Keys(b);
+		PyObject *iter;
+		PyObject *key, *value;
+		int status;
+
+		if (keys == NULL)
+			/* Docstring says this is equivalent to E.keys() so
+			 * if E doesn't have a .keys() method we want
+			 * AttributeError to percolate up.  Might as well
+			 * do the same for any other error.
+			 */
+			return -1;
+
+		iter = PyObject_GetIter(keys);
+		Py_DECREF(keys);
+		if (iter == NULL)
+			return -1;
+
+		for (key = PyIter_Next(iter); key; key = PyIter_Next(iter)) {
+			if (!override && PyDict_GetItem(a, key) != NULL) {
+				Py_DECREF(key);
+				continue;
+			}
+			value = PyObject_GetItem(b, key);
+			if (value == NULL) {
+				Py_DECREF(iter);
+				Py_DECREF(key);
+				return -1;
+			}
+			status = PyOrderedDict_SetItem(a, key, value);
+			Py_DECREF(key);
+			Py_DECREF(value);
+			if (status < 0) {
+				Py_DECREF(iter);
+				return -1;
+			}
+		}
+		Py_DECREF(iter);
+		if (PyErr_Occurred())
+			/* Iterator completed, via error */
+			return -1;
+	} else {
 		PyErr_SetString(PyExc_TypeError,
 				"source has undefined order");
 		return -1;
@@ -1719,11 +1974,11 @@ PyOrderedDict_CopySome(PyObject *a, PyObject *b,
 		 * incrementally resizing as we insert new items.  Expect
 		 * that there will be no (or few) overlapping keys.
 		 */
-		if ((mp->ma_fill + count)*3 >= (mp->ma_mask+1)*2) {
+		if ((mp->od_fill + count)*3 >= (mp->ma_mask+1)*2) {
 		   if (dictresize(mp, (mp->ma_used + count)*2) != 0)
 			   return -1;
 		}
-		epp = other->ma_otablep;
+		epp = other->od_otablep;
 		epp += start;
 		for (i = 0; i < count; i++, epp += step) {
 			entry = *epp;
@@ -1760,10 +2015,20 @@ PyOrderedDict_Copy(PyObject *o)
 		PyErr_BadInternalCall();
 		return NULL;
 	}
-	copy = PyOrderedDict_New();
-	if (copy == NULL)
-		return NULL;
-	if (PyOrderedDict_Merge(copy, o, 1) == 0)
+	if (PySortedDict_CheckExact(o)) {
+		copy = PySortedDict_New();
+		if (copy == NULL)
+			return NULL;
+		((PySortedDictObject *) copy)->sd_cmp = ((PySortedDictObject *) o)->sd_cmp;
+		((PySortedDictObject *) copy)->sd_key = ((PySortedDictObject *) o)->sd_key;
+		((PySortedDictObject *) copy)->sd_value = ((PySortedDictObject *) o)->sd_value;
+	} else {
+		copy = PyOrderedDict_New();
+		if (copy == NULL)
+			return NULL;
+	}
+	((PyOrderedDictObject *) copy)->od_state = ((PyOrderedDictObject *) o)->od_state;
+	if (PyOrderedDict_Merge(copy, o, 1, 0) == 0)
 		return copy;
 	Py_DECREF(copy);
 	return NULL;
@@ -1955,7 +2220,7 @@ dict_equal(PyOrderedDictObject *a, PyOrderedDictObject *b)
 
 	/* Same # of entries -- check all of 'em.  Exit early on any diff. */
 	
-	for (i = 0, app = a->ma_otablep, bpp = b->ma_otablep; i < a->ma_used;
+	for (i = 0, app = a->od_otablep, bpp = b->od_otablep; i < a->ma_used;
 		i++, app++, bpp++) {
 		int cmp;
 		PyObject *aval = (*app)->me_value;
@@ -2205,7 +2470,7 @@ dict_popitem(PyOrderedDictObject *mp, PyObject *args)
 				"popitem(): index out of range");
 		return NULL;
 	}
-	epp = mp->ma_otablep;
+	epp = mp->od_otablep;
 	epp += j;
 	PyTuple_SET_ITEM(res, 0, (*epp)->me_key);
 	PyTuple_SET_ITEM(res, 1, (*epp)->me_value);
@@ -2287,7 +2552,7 @@ dict_index(register PyOrderedDictObject *mp, PyObject *key)
 		return NULL;
 	}
 
-	for (index = 0, tmp = mp->ma_otablep; index < mp->ma_used; index++, tmp++) {
+	for (index = 0, tmp = mp->od_otablep; index < mp->ma_used; index++, tmp++) {
 		if (*tmp == ep) {
 			return PyInt_FromSize_t(index);
 		}
@@ -2318,7 +2583,7 @@ dict_reverse(register PyOrderedDictObject *mp)
 {
 	PyOrderedDictEntry **epps, **eppe, *tmp;
 
-	epps = mp->ma_otablep;
+	epps = mp->od_otablep;
 	eppe = epps + ((mp->ma_used)-1);
 	while (epps < eppe) {
 		tmp = *epps;
@@ -2337,6 +2602,11 @@ dict_setkeys(register PyOrderedDictObject *mp, PyObject *keys)
 	PyObject *it;
 	long hash;
 
+	if (PySortedDict_CheckExact(mp)) {
+		PyErr_SetString(PyExc_TypeError,
+				"sorteddict does not support setkeys() assignment");
+		return NULL;
+	}
 
 /* determine length -> ok if ok 
 if ok, then we still don't know if all keys will be found
@@ -2380,7 +2650,7 @@ if ok, then we still don't know if all keys will be found
 				     mp->ma_used, i);
 				break;
 			}
-			memcpy(mp->ma_otablep, newtable, size);
+			memcpy(mp->od_otablep, newtable, size);
 			PyMem_DEL(newtable);
 			Py_DECREF(it);
 			Py_RETURN_NONE;
@@ -2432,7 +2702,7 @@ dict_setvalues(register PyOrderedDictObject *mp, PyObject *values)
 	PyObject *it;	/* iter(seq2) */
 	Py_ssize_t i;	/* index into seq2 of current element */
 	PyObject *item = NULL;	/* values[i] */
-	PyOrderedDictEntry **epp = mp->ma_otablep, *tmp;
+	PyOrderedDictEntry **epp = mp->od_otablep, *tmp;
 
 	assert(d != NULL);
 	assert(PyOrderedDict_Check(d));
@@ -2489,7 +2759,7 @@ static PyObject *
 dict_setitems(register PyObject *mp,  PyObject *args, PyObject *kwds)
 {
 	PyOrderedDict_Clear((PyObject *)mp);
-	if (dict_update_common(mp, args, kwds, "setitems") != -1)
+	if (dict_update_common(mp, args, kwds, "|Oi:setitems") != -1)
 		Py_RETURN_NONE;
 	return NULL;
 }
@@ -2503,6 +2773,11 @@ dict_rename(register PyOrderedDictObject *mp, PyObject *args)
 	PyOrderedDictEntry *ep, **epp;
 	register Py_ssize_t index;
 
+	if (PySortedDict_CheckExact(mp)) {
+		PyErr_SetString(PyExc_TypeError,
+				"sorteddict does not support rename()");
+		return NULL;
+	}
 	if (!PyArg_UnpackTuple(args, "get", 1, 2, &oldkey, &newkey))
 		return NULL;
 
@@ -2515,7 +2790,7 @@ dict_rename(register PyOrderedDictObject *mp, PyObject *args)
 	ep = (mp->ma_lookup)(mp, oldkey, hash);
 	if (ep == NULL || ep->me_value == NULL)
 		return NULL;
-	epp = mp->ma_otablep;
+	epp = mp->od_otablep;
 	for (index = 0; index < mp->ma_used; index++, epp++) 
 		if (*epp == ep)
 			break;
@@ -2536,7 +2811,42 @@ dict_rename(register PyOrderedDictObject *mp, PyObject *args)
 	Py_RETURN_NONE;
 }
 
+/* support for pickling */
+static PyObject *
+dict_reduce(PyOrderedDictObject *self)
+{
+	PyObject *result, *it;
+	it = dictiter_new(self, &PyOrderedDictIterItem_Type, NULL, NULL);
+	if (PySortedDict_CheckExact(self)) {
+		if (((PySortedDictObject *) self)->sd_cmp == NULL)
+			printf("NULL!!!!\n");
+		result = Py_BuildValue("O(()OOOi)NNO", self->ob_type, 
+					((PySortedDictObject *) self)->sd_cmp,
+					((PySortedDictObject *) self)->sd_key,
+					((PySortedDictObject *) self)->sd_value, 
+					REVERSE(self), Py_None, Py_None, it);
+	}
+	else
+		result = Py_BuildValue("O(()ii)NNO", self->ob_type, RELAXED(self), KVIO(self), Py_None, Py_None, it);
+	return result;
+}
 
+
+static PyObject *
+ordereddict_getstate(register PyOrderedDictObject *mp)
+{
+	return PyInt_FromLong(mp->od_state);
+}
+
+static PyObject *
+ordereddict_dump(register PyOrderedDictObject *mp)
+{
+	if (dump_ordereddict_head(mp) != -1)
+		dump_otablep(mp);
+		if (PySortedDict_CheckExact(mp))
+			dump_sorteddict_fun((PySortedDictObject *) mp);
+	Py_RETURN_NONE;
+}
 
 
 PyDoc_STRVAR(has_key__doc__,
@@ -2544,6 +2854,8 @@ PyDoc_STRVAR(has_key__doc__,
 
 PyDoc_STRVAR(contains__doc__,
 "D.__contains__(k) -> True if D has a key k, else False");
+
+PyDoc_STRVAR(reduce__doc__, "Return state information for pickling.");
 
 PyDoc_STRVAR(getitem__doc__, "x.__getitem__(y) <==> x[y]");
 
@@ -2614,11 +2926,18 @@ PyDoc_STRVAR(setitems_doc,
 PyDoc_STRVAR(rename_doc,
 "D.rename(oldkey, newkey) -> exchange keys without changing order");
 
+PyDoc_STRVAR(getstate_doc,
+"D.getstate() -> return the state integer");
+
+PyDoc_STRVAR(dump_doc,
+"D.dump() -> print internals of an orereddict");
+
 static PyMethodDef ordereddict_methods[] = {
 	{"__contains__",(PyCFunction)dict_contains,   METH_O | METH_COEXIST, 
 	 contains__doc__},
 	{"__getitem__", (PyCFunction)dict_subscript, METH_O | METH_COEXIST,
 	 getitem__doc__},
+	{"__reduce__", (PyCFunction)dict_reduce, METH_NOARGS, reduce__doc__},
 	{"has_key",	(PyCFunction)dict_has_key,      METH_O,
 	 has_key__doc__},
 	{"get",         (PyCFunction)dict_get,          METH_VARARGS,
@@ -2656,6 +2975,8 @@ static PyMethodDef ordereddict_methods[] = {
 	{"setvalues",   (PyCFunction)dict_setvalues, METH_O, setvalues_doc},
 	{"setitems",    (PyCFunction)dict_setitems,  METH_VARARGS | METH_KEYWORDS, setitems_doc},
 	{"rename",     (PyCFunction)dict_rename,   METH_VARARGS, rename_doc},
+	{"getstate",     (PyCFunction)ordereddict_getstate,   METH_NOARGS, getstate_doc},
+	{"dump",     (PyCFunction)ordereddict_dump,   METH_NOARGS, dump_doc},
 	{NULL,		NULL}	/* sentinel */
 };
 
@@ -2747,7 +3068,7 @@ dict_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	if (self != NULL) {
 		PyOrderedDictObject *d = (PyOrderedDictObject *)self;
 		/* It's guaranteed that tp->alloc zeroed out the struct. */
-		assert(d->ma_table == NULL && d->ma_fill == 0 && d->ma_used == 0);
+		assert(d->ma_table == NULL && d->od_fill == 0 && d->ma_used == 0);
 		INIT_NONZERO_DICT_SLOTS(d);
 		d->ma_lookup = lookdict_string;
 #ifdef SHOW_CONVERSION_COUNTS
@@ -2757,10 +3078,85 @@ dict_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	return self;
 }
 
-static int
-dict_init(PyObject *self, PyObject *args, PyObject *kwds)
+static PyObject *
+sorteddict_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-	return dict_update_common(self, args, kwds, "dict");
+	PyObject *self;
+
+	assert(type != NULL && type->tp_alloc != NULL);
+	assert(dummy != NULL);
+	self = type->tp_alloc(type, 0);
+	if (self != NULL) {
+		PyOrderedDictObject *d = (PyOrderedDictObject *)self;
+		/* It's guaranteed that tp->alloc zeroed out the struct. */
+		assert(d->ma_table == NULL && d->od_fill == 0 && d->ma_used == 0);
+		INIT_NONZERO_DICT_SLOTS(d);
+		d->ma_lookup = lookdict_string;
+		INIT_SORT_FUNCS(((PySortedDictObject *) self));
+#ifdef SHOW_CONVERSION_COUNTS
+		++created;
+#endif
+	}
+	return self;
+}
+
+static int
+ordereddict_init(PyObject *self, PyObject *args, PyObject *kwds)
+{
+	PyObject *arg = NULL;
+	int result = 0, tmprelax = -1, tmpkvio = -1;
+	
+	static char *kwlist[] = {"src", "relax", "kvio", 0};
+	if (args != NULL)
+		if (!PyArg_ParseTupleAndKeywords(args, kwds, "|Oii:ordereddict",
+			kwlist, &arg,  &tmprelax, &tmpkvio))
+			return -1;
+	if (tmpkvio == -1)
+		tmpkvio = ordereddict_kvio;
+	if (tmpkvio)
+		((PyOrderedDictObject *)self)->od_state |= OD_KVIO_BIT;
+	if (tmprelax == -1)
+		tmprelax = ordereddict_relaxed;
+	if (tmprelax)
+		((PyOrderedDictObject *)self)->od_state |= OD_RELAXED_BIT;
+
+	if (arg != NULL) {
+		if (PyObject_HasAttrString(arg, "keys"))
+			result = PyOrderedDict_Merge(self, arg, 1, tmprelax);
+		else
+			result = PyOrderedDict_MergeFromSeq2(self, arg, 1);
+	}
+	/* do not initialise from keywords at all */
+	return result;
+}
+
+static int
+sorteddict_init(PyObject *self, PyObject *args, PyObject *kwds)
+{
+	PyObject *arg = NULL, *cmpfun = NULL, *keyfun = NULL, *valuefun = NULL;
+	int result = 0, reverse = 0;
+	
+	static char *kwlist[] = {"src", "cmp", "key", "value", "reverse", 0};
+	if (args != NULL)
+		if (!PyArg_ParseTupleAndKeywords(args, kwds, "|OOOOi:sorteddict",
+			kwlist, &arg, &cmpfun, &keyfun, &valuefun, &reverse))
+			return -1;
+	if (reverse)
+		((PyOrderedDictObject *)self)->od_state |= OD_REVERSE_BIT;
+	/* always relaxed about order of source */
+	((PyOrderedDictObject *)self)->od_state |= OD_RELAXED_BIT;
+	
+	if (keyfun != NULL && keyfun != Py_False)
+		((PySortedDictObject *)self)->sd_key = keyfun;
+
+	if (arg != NULL) {
+		if (PyObject_HasAttrString(arg, "keys"))
+			result = PyOrderedDict_Merge(self, arg, 1, 1);
+		else
+			result = PyOrderedDict_MergeFromSeq2(self, arg, 1);
+	}
+	/* do not initialise from keywords at all */
+	return result;
 }
 
 static long
@@ -2778,8 +3174,8 @@ dict_iter(PyOrderedDictObject *dict)
 
 PyDoc_STRVAR(ordereddict_doc,
 "ordereddict() -> new empty dictionary.\n"
-//"dict(mapping) -> new dictionary initialized from a mapping object's\n"
-//"    (key, value) pairs.\n"
+"dict(orderddict) -> new dictionary initialized from a mappings object's\n"
+"    (key, value) pairs.\n"
 //"dict(seq) -> new dictionary initialized as if via:\n"
 //"    d = {}\n"
 //"    for k, v in seq:\n"
@@ -2791,15 +3187,15 @@ PyDoc_STRVAR(ordereddict_doc,
 PyTypeObject PyOrderedDict_Type = {
 	PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
 	0,
-	"ordereddict",
+	"_ordereddict.ordereddict",
 	sizeof(PyOrderedDictObject),
 	0,
 	(destructor)dict_dealloc,		/* tp_dealloc */
-	(printfunc)dict_print,			/* tp_print */
+	(printfunc)ordereddict_print,			/* tp_print */
 	0,					/* tp_getattr */
 	0,					/* tp_setattr */
 	(cmpfunc)dict_compare,			/* tp_compare */
-	(reprfunc)dict_repr,			/* tp_repr */
+	(reprfunc)ordereddict_repr,			/* tp_repr */
 	0,					/* tp_as_number */
 	&dict_as_sequence,			/* tp_as_sequence */
 	&dict_as_mapping,			/* tp_as_mapping */
@@ -2826,11 +3222,63 @@ PyTypeObject PyOrderedDict_Type = {
 	0,					/* tp_descr_get */
 	0,					/* tp_descr_set */
 	0,					/* tp_dictoffset */
-	dict_init,				/* tp_init */
+	ordereddict_init,				/* tp_init */
 	PyType_GenericAlloc,			/* tp_alloc */
 	dict_new,				/* tp_new */
 	PyObject_GC_Del,        		/* tp_free */
 };
+
+
+PyDoc_STRVAR(sorteddict_doc,
+"sorteddict() -> new empty dictionary.\n"
+);
+
+
+PyTypeObject PySortedDict_Type = {
+	PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
+	0,
+	"_ordereddict.sorteddict",
+	sizeof(PySortedDictObject),
+	0,
+	(destructor)dict_dealloc,		/* tp_dealloc */
+	(printfunc)ordereddict_print,			/* tp_print */
+	0,					/* tp_getattr */
+	0,					/* tp_setattr */
+	(cmpfunc)dict_compare,			/* tp_compare */
+	(reprfunc)ordereddict_repr,			/* tp_repr */
+	0,					/* tp_as_number */
+	&dict_as_sequence,			/* tp_as_sequence */
+	&dict_as_mapping,			/* tp_as_mapping */
+	dict_nohash,				/* tp_hash */
+	0,					/* tp_call */
+	0,					/* tp_str */
+	PyObject_GenericGetAttr,		/* tp_getattro */
+	0,					/* tp_setattro */
+	0,					/* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
+		Py_TPFLAGS_BASETYPE,		/* tp_flags */
+	sorteddict_doc,				/* tp_doc */
+	dict_traverse,				/* tp_traverse */
+	dict_tp_clear,				/* tp_clear */
+	dict_richcompare,			/* tp_richcompare */
+	0,					/* tp_weaklistoffset */
+	(getiterfunc)dict_iter,			/* tp_iter */
+	0,					/* tp_iternext */
+	ordereddict_methods,				/* tp_methods */
+	0,					/* tp_members */
+	0,					/* tp_getset */
+	DEFERRED_ADDRESS(&PyDict_Type),					/* tp_base */
+	0,					/* tp_dict */
+	0,					/* tp_descr_get */
+	0,					/* tp_descr_set */
+	0,					/* tp_dictoffset */
+	sorteddict_init,				/* tp_init */
+	PyType_GenericAlloc,			/* tp_alloc */
+	sorteddict_new,				/* tp_new */
+	PyObject_GC_Del,        		/* tp_free */
+};
+
+
 
 /* Dictionary iterator types */
 
@@ -2842,13 +3290,13 @@ typedef struct {
 	PyObject* di_result; /* reusable result tuple for iteritems */
 	Py_ssize_t len;
 	int step;
-} dictiterobject;
+} ordereddictiterobject;
 
 static PyObject *
 dictiter_new(PyOrderedDictObject *dict, PyTypeObject *itertype, 
 						PyObject *args, PyObject *kwds)
 {
-	dictiterobject *di;
+	ordereddictiterobject *di;
 	int reverse = 0;
 	static char *kwlist[] = {"reverse", 0};
 
@@ -2857,7 +3305,7 @@ dictiter_new(PyOrderedDictObject *dict, PyTypeObject *itertype,
 			kwlist, &reverse))
 			return NULL;
 
-	di = PyObject_New(dictiterobject, itertype);
+	di = PyObject_New(ordereddictiterobject, itertype);
 	if (di == NULL)
 		return NULL;
 	Py_INCREF(dict);
@@ -2884,7 +3332,7 @@ dictiter_new(PyOrderedDictObject *dict, PyTypeObject *itertype,
 }
 
 static void
-dictiter_dealloc(dictiterobject *di)
+dictiter_dealloc(ordereddictiterobject *di)
 {
 	Py_XDECREF(di->di_dict);
 	Py_XDECREF(di->di_result);
@@ -2892,7 +3340,7 @@ dictiter_dealloc(dictiterobject *di)
 }
 
 static PyObject *
-dictiter_len(dictiterobject *di)
+dictiter_len(ordereddictiterobject *di)
 {
 	Py_ssize_t len = 0;
 	if (di->di_dict != NULL && di->di_used == di->di_dict->ma_used)
@@ -2907,7 +3355,7 @@ static PyMethodDef dictiter_methods[] = {
  	{NULL,		NULL}		/* sentinel */
 };
 
-static PyObject *dictiter_iternextkey(dictiterobject *di)
+static PyObject *dictiter_iternextkey(ordereddictiterobject *di)
 {
 	PyObject *key;
 	register Py_ssize_t i;
@@ -2930,7 +3378,7 @@ static PyObject *dictiter_iternextkey(dictiterobject *di)
 		goto fail;
 	if (i >= d->ma_used)
 		goto fail;
-	epp = d->ma_otablep;
+	epp = d->od_otablep;
 	di->di_pos = i+di->step;
 	di->len--; /* len can be calculated */
 	key = epp[i]->me_key;
@@ -2946,8 +3394,8 @@ fail:
 PyTypeObject PyOrderedDictIterKey_Type = {
 	PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
 	0,					/* ob_size */
-	"ordereddict-keyiterator",		/* tp_name */
-	sizeof(dictiterobject),			/* tp_basicsize */
+	"_ordereddict.keyiterator",		/* tp_name */
+	sizeof(ordereddictiterobject),			/* tp_basicsize */
 	0,					/* tp_itemsize */
 	/* methods */
 	(destructor)dictiter_dealloc, 		/* tp_dealloc */
@@ -2977,7 +3425,7 @@ PyTypeObject PyOrderedDictIterKey_Type = {
 	0,
 };
 
-static PyObject *dictiter_iternextvalue(dictiterobject *di)
+static PyObject *dictiter_iternextvalue(ordereddictiterobject *di)
 {
 	PyObject *value;
 	register Py_ssize_t i;
@@ -2998,7 +3446,7 @@ static PyObject *dictiter_iternextvalue(dictiterobject *di)
 	i = di->di_pos;
 	if (i < 0 || i >= d->ma_used)
 		goto fail;
-	epp = d->ma_otablep;
+	epp = d->od_otablep;
 	di->di_pos = i+di->step;
 	di->len--; /* len can be calculated */
 	value = epp[i]->me_value;
@@ -3014,8 +3462,8 @@ fail:
 PyTypeObject PyOrderedDictIterValue_Type = {
 	PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
 	0,					/* ob_size */
-	"ordereddict-valueiterator",		/* tp_name */
-	sizeof(dictiterobject),			/* tp_basicsize */
+	"_ordereddict.valueiterator",		/* tp_name */
+	sizeof(ordereddictiterobject),			/* tp_basicsize */
 	0,					/* tp_itemsize */
 	/* methods */
 	(destructor)dictiter_dealloc, 		/* tp_dealloc */
@@ -3045,7 +3493,7 @@ PyTypeObject PyOrderedDictIterValue_Type = {
 	0,
 };
 
-static PyObject *dictiter_iternextitem(dictiterobject *di)
+static PyObject *dictiter_iternextitem(ordereddictiterobject *di)
 {
 	PyObject *key, *value, *result = di->di_result;
 	register Py_ssize_t i;
@@ -3069,7 +3517,7 @@ static PyObject *dictiter_iternextitem(dictiterobject *di)
 
 	if (i >= d->ma_used)
 		goto fail;
-	epp = d->ma_otablep;
+	epp = d->od_otablep;
 	di->di_pos = i+di->step;
 	if (result->ob_refcnt == 1) {
 		Py_INCREF(result);
@@ -3098,8 +3546,8 @@ fail:
 PyTypeObject PyOrderedDictIterItem_Type = {
 	PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
 	0,					/* ob_size */
-	"ordereddict-itemiterator",		/* tp_name */
-	sizeof(dictiterobject),			/* tp_basicsize */
+	"_ordereddict.itemiterator",		/* tp_name */
+	sizeof(ordereddictiterobject),			/* tp_basicsize */
 	0,					/* tp_itemsize */
 	/* methods */
 	(destructor)dictiter_dealloc, 		/* tp_dealloc */
@@ -3131,8 +3579,35 @@ PyTypeObject PyOrderedDictIterItem_Type = {
 
 /*******************************************************************/
 
+static PyObject *
+getset_relaxed(PyObject *self, PyObject *args)
+{
+	int n = -1, oldval = ordereddict_relaxed;
+	if (!PyArg_ParseTuple(args, "|i", &n))
+		return NULL;
+	if (n != -1) {
+		ordereddict_relaxed = n;
+	}
+	return PyBool_FromLong(oldval);
+}
+
+static PyObject *
+getset_kvio(PyObject *self, PyObject *args)
+{
+	int n = -1, oldval = ordereddict_kvio;
+	if (!PyArg_ParseTuple(args, "|i", &n))
+		return NULL;
+	if (n != -1) {
+		ordereddict_kvio = n;
+	}
+	return PyBool_FromLong(oldval);
+}
+
 static PyMethodDef ordereddict_functions[] = {
-/*	{"bench",	ordered_bench, 	METH_VARARGS,	"benchmarking func"}, */
+	{"relax",	getset_relaxed,	METH_VARARGS,	
+	"get/set routine for allowing global undeordered dict initialisation"},
+	{"kvio",	getset_kvio,	METH_VARARGS,	
+	"get/set routine for allowing global KeyValue Insertion Order initialisation"},
 	{NULL,		NULL}		/* sentinel */
 };
 
@@ -3156,8 +3631,11 @@ init_ordereddict(void)
 	   initializes the ob.ob_type field to &PyType_Type if it's NULL,
 	   so it's not necessary to fill in ob_type first. */
 	PyOrderedDict_Type.tp_base = &PyDict_Type;
+	PySortedDict_Type.tp_base = &PyOrderedDict_Type;
 
 	if (PyType_Ready(&PyOrderedDict_Type) < 0)
+		return;
+	if (PyType_Ready(&PySortedDict_Type) < 0)
 		return;
 	
 	/* AvdN: TODO understand why it is necessary or not (as it seems)
@@ -3178,5 +3656,8 @@ init_ordereddict(void)
 	Py_INCREF(&PyOrderedDict_Type);
 	if (PyModule_AddObject(m, "ordereddict",
 			       (PyObject *) &PyOrderedDict_Type) < 0)
+	Py_INCREF(&PySortedDict_Type);
+	if (PyModule_AddObject(m, "sorteddict",
+			       (PyObject *) &PySortedDict_Type) < 0)
 		return;
 }
