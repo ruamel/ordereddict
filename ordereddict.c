@@ -666,7 +666,7 @@ dictresize(PyOrderedDictObject *mp, Py_ssize_t minused)
 	mp->od_otablep = newotablep;
 	mp->ma_mask = newsize - 1;
 	memset(newtable, 0, sizeof(PyOrderedDictEntry) * newsize);
-	memcpy(newotablep, oldotablep, sizeof(PyOrderedDictEntry *) * newsize);
+	memcpy(newotablep, oldotablep, sizeof(PyOrderedDictEntry *) * mp->ma_used);
 	epp = mp->od_otablep;
 	j = mp->ma_used;
 	mp->ma_used = 0;

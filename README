@@ -1,9 +1,9 @@
 ordereddict
 
-Version: ordereddict 0.4
+Version: ordereddict 0.4.1
 Author:  Anthon van der Neut
 Contact: anthon@mnt.org
- Date:   2007-10-30
+ Date:   2007-11-06
 
 The ordereddict module in short
 
@@ -13,8 +13,8 @@ Insertion Order (KVIO, an existing key's position is removed and put at the
 back).
 
 Sorted dictionaries are also provided. Currently only with Key Sorted Order
-(KSO, no sorting function can be specified, nor any function to apply on the
-key before comparison (although that is in the making)).
+(KSO, no sorting function can be specified, but you can specify a transform to
+apply on the key before comparison (e.g. string.lower)
 
 Usage:
 
@@ -157,14 +157,16 @@ python test_dict.py
 
 To Do
 
-  • specification of a key rewrite function (such as string.lower) functioning
-    in the same way as somelist.sort(key=string.lower for KSO.
   • implement Value Sorted Order (VSO: specify value=True for normal value
     comparison), or a value rewrite function for VSO ( e.g. value=string.lower
     )
   • implement Item Sorted Order (ISO): compare value then key ( the other way
     around would not make sense with unique keys, but we might have non-unique
     values).
+  • implement slice deletion for sorteddict
+  • more testing of sorteddict functionality
+  • speedtest slices
+  • speedtest sorteddict
   • check on the test_update unittest in test_dict.py
 
 To Consider
@@ -172,7 +174,8 @@ To Consider
   • comparing ordereddicts (as per Larosa/Foord)
   • implement the whole (optionally) using pointers in the DictObject Items
     (Faster on insertion/deletion, slower on accessing slices, makes
-    implementing algorithms somewhat more difficult)
+    implementing algorithms somewhat more difficult), would have to seperate
+    code for sorteddict as key position determination would be much slower.
   • supply a pure Python implementation of exactly the functionality in
     ordereddict
   • test on older versions (< 2.4) of Python and make portable (if this can be
@@ -193,7 +196,11 @@ structure and keeps this vector compact (and in order) so indexing is fast. The
 elements do not know about their position (so nothing needs to be updated there
 if that position changes, but then finding an item's index is expensive.
 Insertion/deletion is also relatively expensive in that on average half of the
-vector of pointers needs to be memmove-d one position.
+vector of pointers needs to be memmove-d one position. There is also an long
+for bit info like kvio, relaxed.
+
+The sorteddict structure has an additional 3 pointers of which only one
+(sd_key) is currently used (the others are sd_cmp and sd_value).
 
 Speed
 
@@ -253,6 +260,17 @@ format, format that does not try to preserve the order of key-value pairs so
 that comparing files is difficult with 'standard' text tools).
 
 History
+
+0.4a  2007-11-6
+Bug found and fixed by Fabio Zadrozny on resizing dictionaries
+
+0.4   2007-10-30
+added pickling, added relaxed initialisation/update (from unordered dicts)
+added KVIO (Key Value Insertion Order ie. key moves to back on update)
+implemented sorteddict, with KSO, Key Sorted Order. You can specify
+a function for key transformation before comparison (such as string.lower)
+sorteddict does not have all of the ordereddict methods as not all make
+sense (eg. slice assignment, rename, setkeys)
 
 0.3   2007-10-24
 added setkeys/setvalues/setitems; slice retrieval, deletion, assigment
