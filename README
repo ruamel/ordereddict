@@ -1,9 +1,9 @@
 ordereddict
 
-Version: ordereddict 0.4.1
+Version: ordereddict 0.4.2
 Author:  Anthon van der Neut
 Contact: anthon@mnt.org
- Date:   2007-11-06
+ Date:   2009-03-31
 
 The ordereddict module in short
 
@@ -40,6 +40,9 @@ This module has been tested under:
 ├───────────┼──────────────────┼──────┤
 │Windows XP │Visual Studio 2003│2.5.1 │
 └───────────┴──────────────────┴──────┘
+
+Version 0.4.1 was tested and found working on SuSE Linux Enterprise Server (GCC
+4.1.0 and Intel C/C++ 10.1) by Stuart Stock.
 
 Home/Downloading
 
@@ -261,7 +264,11 @@ that comparing files is difficult with 'standard' text tools).
 
 History
 
-0.4a  2007-11-6
+0.4.2  2009-03-27
+Bug found and by Alexandre Andrade and Fabio Zadrozny in
+doing deepcopy
+
+0.4.1  2007-11-06
 Bug found and fixed by Fabio Zadrozny on resizing dictionaries
 
 0.4   2007-10-30
@@ -294,4 +301,4 @@ an email to comp.lang.python about why timing with timeit did seem to
 be memory hungry ....
 and then I realiased ordereddict had a memory leak %-)
 
-http://ipunkt-solutions.de/download/1x1/ordereddict/dot.gif
+http://ruamel.eu/download/1x1/ordereddict/dot.gif

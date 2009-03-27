@@ -19,6 +19,13 @@ Ordering by key insertion order (KIO) instead of key/val insertion order
 (KVIO) is less expensive  (as the list of keys does not have to be updated).
 */
 
+#if defined(_MSC_VER)
+#undef PyAPI_FUNC
+#undef PyAPI_DATA
+#define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
+#define PyAPI_DATA(RTYPE) __declspec(dllexport) RTYPE
+#endif
+
 #include "Python.h"
 #include "ordereddict.h"
 
@@ -61,7 +68,7 @@ static PyObject *dummy = NULL; /* Initialized by first call to newPyDictObject()
 
 #ifdef Py_REF_DEBUG
 PyObject *
-_PyDict_Dummy(void)
+_PyOrderedDict_Dummy(void)
 {
 	return dummy;
 }
@@ -788,7 +795,7 @@ PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
 	n_used = mp->ma_used;
 	Py_INCREF(value);
 	Py_INCREF(key);
-	if (PySortedDict_CheckExact(op)) {
+	if (PySortedDict_Check(op)) {
 		if (insertsorteddict(mp, key, hash, value) != 0)
 			return -1;
 	} else if (insertdict(mp, key, hash, value, KVIO(mp) ? -2: -1) != 0)
@@ -819,7 +826,7 @@ PyOrderedDict_InsertItem(register PyOrderedDictObject *mp, Py_ssize_t index,
 	register long hash;
 	register Py_ssize_t n_used;
 
-	if (PySortedDict_CheckExact(mp)) {
+	if (PySortedDict_Check(mp)) {
 		PyErr_SetString(PyExc_TypeError,
 				"sorteddict does not support insert()");
 		return -1;
@@ -1024,7 +1031,7 @@ PyOrderedDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey, PyObject **p
 	register Py_ssize_t i;
 	register PyOrderedDictEntry **epp;
 
-	if (!PyOrderedDict_CheckExact(op) && !PySortedDict_CheckExact(op))
+	if (!PyOrderedDict_Check(op) && !PySortedDict_Check(op))
 		return 0;
 	i = *ppos;
 	if (i < 0)
@@ -1154,7 +1161,8 @@ ordereddict_repr(PyOrderedDictObject *mp)
 	PyObject *key, *value;
 	char *typestr = "ordered";
 
-	if (PySortedDict_CheckExact(mp))
+	/* if (PySortedDict_CheckExact(mp))*/
+	if (PySortedDict_Check(mp))
 		typestr = "sorted";
 	i = Py_ReprEnter((PyObject *)mp);
 	if (i != 0) {
@@ -2704,8 +2712,8 @@ dict_setvalues(register PyOrderedDictObject *mp, PyObject *values)
 	PyObject *item = NULL;	/* values[i] */
 	PyOrderedDictEntry **epp = mp->od_otablep, *tmp;
 
-	assert(d != NULL);
-	assert(PyOrderedDict_Check(d));
+	assert(mp != NULL);
+	assert(PyOrderedDict_Check(mp));
 	assert(values != NULL);
 
 	i = PyObject_Length(values);
@@ -2815,8 +2823,11 @@ dict_rename(register PyOrderedDictObject *mp, PyObject *args)
 static PyObject *
 dict_reduce(PyOrderedDictObject *self)
 {
-	PyObject *result, *it;
+  PyObject *result, *it, *dict=NULL;
 	it = dictiter_new(self, &PyOrderedDictIterItem_Type, NULL, NULL);
+        dict = Py_None;
+        Py_INCREF(dict);
+        Py_INCREF(dict);
 	if (PySortedDict_CheckExact(self)) {
 		if (((PySortedDictObject *) self)->sd_cmp == NULL)
 			printf("NULL!!!!\n");
@@ -2824,10 +2835,11 @@ dict_reduce(PyOrderedDictObject *self)
 					((PySortedDictObject *) self)->sd_cmp,
 					((PySortedDictObject *) self)->sd_key,
 					((PySortedDictObject *) self)->sd_value, 
-					REVERSE(self), Py_None, Py_None, it);
+					REVERSE(self), dict, dict, it);
 	}
-	else
-		result = Py_BuildValue("O(()ii)NNO", self->ob_type, RELAXED(self), KVIO(self), Py_None, Py_None, it);
+	else {
+		result = Py_BuildValue("O(()ii)NNO", self->ob_type, RELAXED(self), KVIO(self), dict, dict, it);
+	}
 	return result;
 }
 

@@ -132,10 +132,14 @@ PyAPI_DATA(PyTypeObject) PyOrderedDict_Type;
 PyAPI_DATA(PyTypeObject) PySortedDict_Type;
 
 #if PY_VERSION_HEX >= 0x02060000
+  /* AvdN: this might need reviewing for > 2.6 */
   #define PyOrderedDict_Check(op) \
+                 PyType_FastSubclass(Py_Type(op), Py_TPFLAGS_DICT_SUBCLASS)
+  #define PySortedDict_Check(op) \
                  PyType_FastSubclass(Py_Type(op), Py_TPFLAGS_DICT_SUBCLASS)
 #else
   #define PyOrderedDict_Check(op) PyObject_TypeCheck(op, &PyOrderedDict_Type)
+  #define PySortedDict_Check(op) PyObject_TypeCheck(op, &PySortedDict_Type)
 #endif
 #define PyOrderedDict_CheckExact(op) ((op)->ob_type == &PyOrderedDict_Type)
 #define PySortedDict_CheckExact(op) ((op)->ob_type == &PySortedDict_Type)

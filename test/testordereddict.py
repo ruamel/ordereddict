@@ -3,6 +3,7 @@ if __name__ != "__main__":
     import py
 import string
 import os
+import sys
 import cPickle
 import random
 
@@ -671,7 +672,50 @@ class TestOrderedDict(object):
         assert nd.keys() == r.keys()
         assert nd.values() == r.values()
 
+    def test_subclass_sorted(self): # found thanks to Sam Pointon
+        class SD(sorteddict):
+            pass
+        s = SD({0: 'foo', 2: 'bar'})
+        s[1] = 'abc'
+        print s.items()
+        assert s.items() == [(0, 'foo'), (1, 'abc'), (2, 'bar')]
+        
+    def test_subclass_sorted_repr(self): # found thanks to Sam Pointon
+        class SD(sorteddict):
+            pass
+        s = SD({0: 'foo', 2: 'bar'})
+        x = repr(s)
+        assert x == "sorteddict([(0, 'foo'), (2, 'bar')])"
+        
+    def test_deepcopy(self): # found thanks to Alexandre Andrade
+        import copy
+        import gc
+        d = ordereddict([(1, 2)])
+        gc.collect()
+        none_refcount = sys.getrefcount(None)
+        for i in xrange(10):
+            copy.deepcopy(d)
+            gc.collect()
+        assert none_refcount == sys.getrefcount(None)
 
+
+#############################
+
+    def _test_alloc_many(self):
+        res = []
+        times = 1000
+        while times > 0:
+            times -= 1
+            td = ordereddict()
+            count = 100000
+            while count > 0:
+                td['ab%08d' % count] = dict(abcdef = '%09d' % (count))
+                count -= 1
+            count = 100000
+            while count > 0:
+                del td['ab%08d' % count]
+                count -= 1
+            res.append(td)
 
 # if py.test is not being used
 def main():
