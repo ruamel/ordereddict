@@ -131,8 +131,8 @@ struct _sorteddictobject {
 PyAPI_DATA(PyTypeObject) PyOrderedDict_Type;
 PyAPI_DATA(PyTypeObject) PySortedDict_Type;
 
-#if PY_VERSION_HEX >= 0x02060000
-  /* AvdN: this might need reviewing for > 2.6 */
+#if PY_VERSION_HEX >= 0x02070000
+  /* AvdN: this might need reviewing for > 2.7 */
   #define PyOrderedDict_Check(op) \
                  PyType_FastSubclass(Py_Type(op), Py_TPFLAGS_DICT_SUBCLASS)
   #define PySortedDict_Check(op) \

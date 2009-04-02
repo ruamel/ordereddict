@@ -29,7 +29,7 @@ Ordering by key insertion order (KIO) instead of key/val insertion order
 #include "Python.h"
 #include "ordereddict.h"
 
-#if PY_VERSION_HEX < 0x02060000
+#if PY_VERSION_HEX < 0x02070000
 #define Py_Type(ob)            (((PyObject*)(ob))->ob_type)
 #endif
 
@@ -1786,6 +1786,7 @@ PyOrderedDict_MergeFromSeq2(PyObject *d, PyObject *seq2, int override)
 		fast = NULL;
 		item = PyIter_Next(it);
 		if (item == NULL) {
+
 			if (PyErr_Occurred())
 				goto Fail;
 			break;
@@ -2298,8 +2299,10 @@ dict_contains(register PyOrderedDictObject *mp, PyObject *key)
 static PyObject *
 dict_has_key(register PyOrderedDictObject *mp, PyObject *key)
 {
+#if PY_VERSION_HEX < 0x02060000
 	long hash;
 	PyOrderedDictEntry *ep;
+#endif
 
 #if PY_VERSION_HEX >= 0x02060000
 	if (Py_Py3kWarningFlag &&
@@ -3119,10 +3122,12 @@ ordereddict_init(PyObject *self, PyObject *args, PyObject *kwds)
 	int result = 0, tmprelax = -1, tmpkvio = -1;
 	
 	static char *kwlist[] = {"src", "relax", "kvio", 0};
-	if (args != NULL)
+	if (args != NULL) {
 		if (!PyArg_ParseTupleAndKeywords(args, kwds, "|Oii:ordereddict",
-			kwlist, &arg,  &tmprelax, &tmpkvio))
+					 kwlist, &arg,  &tmprelax, &tmpkvio)) {
 			return -1;
+                }
+	}
 	if (tmpkvio == -1)
 		tmpkvio = ordereddict_kvio;
 	if (tmpkvio)
