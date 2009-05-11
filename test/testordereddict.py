@@ -421,6 +421,15 @@ class TestOrderedDict(object):
         #print t
         assert r == t
 
+    def test_sd_slice(self):
+        r = sorteddict(self.z)
+        print r
+        y = r[3:6] 
+        print y
+        assert y['d'] == 3
+        assert y['e'] == 4
+        assert y['f'] == 5
+
     def test_sd_del_consequitive_slice(self):
         r = sorteddict(self.z)
         if not self.nopytest:

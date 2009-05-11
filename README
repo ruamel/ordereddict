@@ -1,9 +1,9 @@
 ordereddict
 
-Version: ordereddict 0.4.3
+Version: ordereddict 0.4.4
 Author:  Anthon van der Neut
 Contact: anthon@mnt.org
- Date:   2009-04-02
+ Date:   2009-05-11
 
 The ordereddict module in short
 
@@ -277,7 +277,11 @@ that comparing files is difficult with 'standard' text tools).
 
 History
 
-0.4.3  2009-04-02
+0.4.4  2009-05-11
+Fix for a bug in slicing SortedDicts.
+Found by, and fix provided by, Migel Anguel (linos.es)
+
+0.4.3  2009-04-03
 Changed ordereddict.h so things now work on Python 2.6.1
 
 0.4.2  2009-03-27

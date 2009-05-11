@@ -1968,7 +1968,7 @@ PyOrderedDict_CopySome(PyObject *a, PyObject *b,
 		return -1;
 	}
 	mp = (PyOrderedDictObject*)a;
-	if (PyOrderedDict_CheckExact(b)) {
+	if (PyOrderedDict_CheckExact(b) || PySortedDict_CheckExact(b)) {
 		other = (PyOrderedDictObject*)b;
 		if (other == mp || other->ma_used == 0)
 			/* a.update(a) or a.update({}); nothing to do */
@@ -3038,6 +3038,7 @@ PyOderedDict_Slice(PyObject *op, register Py_ssize_t ilow,
 	slice = (PyOrderedDictObject *) PyOrderedDict_New();
 	if (slice == NULL)
 		return NULL;
+
 	/* [:] -> ilow = 0, ihigh MAXINT */
 	if (ilow < 0)
 		ilow += mp->ma_used;
@@ -3052,8 +3053,10 @@ PyOderedDict_Slice(PyObject *op, register Py_ssize_t ilow,
 	else if (ihigh > mp->ma_used)
 		ihigh = mp->ma_used;
 
-	if (PyOrderedDict_CopySome((PyObject *) slice, op, ilow, 1, (ihigh-ilow), 1) == 0)
+	if (PyOrderedDict_CopySome((PyObject *) slice, 
+                                   op, ilow, 1, (ihigh-ilow), 1) == 0) {
 		return (PyObject *) slice;
+        }
 	Py_DECREF(slice);
 	return NULL;
 }
