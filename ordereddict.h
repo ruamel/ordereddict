@@ -4,6 +4,13 @@
 extern "C" {
 #endif
 
+#ifdef _MSC_VER
+#undef PyAPI_FUNC
+#undef PyAPI_DATA
+#define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
+#define PyAPI_DATA(RTYPE) __declspec(dllexport) RTYPE
+#endif
+
 /* Ordered Dictionary object implementation using a hash table and a vector of
    pointers to the items.
 */
@@ -54,13 +61,16 @@ meaning otherwise.
 */
 
 #if PY_VERSION_HEX < 0x02050000
+#ifdef _MSC_VER
+	typedef int Py_ssize_t;
+#else
 typedef ssize_t			Py_ssize_t;
+#endif
 typedef Py_ssize_t		(*lenfunc)(PyObject *);
 typedef intintargfunc	ssizessizeargfunc;
 typedef intintobjargproc	ssizessizeobjargproc;
 
 #define PyInt_FromSize_t(A)	  PyInt_FromLong((long) A)
-
 #endif
 
 /* PyOrderedDict_MINSIZE is the minimum size of a dictionary.  This many slots are
@@ -131,7 +141,7 @@ struct _sorteddictobject {
 PyAPI_DATA(PyTypeObject) PyOrderedDict_Type;
 PyAPI_DATA(PyTypeObject) PySortedDict_Type;
 
-#if PY_VERSION_HEX >= 0x02070000
+#if PY_VERSION_HEX >= 0x02080000
   /* AvdN: this might need reviewing for > 2.7 */
   #define PyOrderedDict_Check(op) \
                  PyType_FastSubclass(Py_Type(op), Py_TPFLAGS_DICT_SUBCLASS)

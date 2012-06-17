@@ -22,7 +22,6 @@ def do_one():
 
 for i in range(1000000):
     if i % 100 == 0:
-       print '\r %8d' % ( i ),
-       sys.stdout.flush()
+        print '\r %8d' % ( i ),
+        sys.stdout.flush()
     do_one()
-

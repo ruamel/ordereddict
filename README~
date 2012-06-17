@@ -1,9 +1,9 @@
 ordereddict
 
-Version: ordereddict 0.4.4
+Version: ordereddict 0.4.5
 Author:  Anthon van der Neut
 Contact: anthon@mnt.org
- Date:   2009-05-11
+ Date:   2012-06-17
 
 The ordereddict module in short
 
@@ -14,7 +14,7 @@ back).
 
 Sorted dictionaries are also provided. Currently only with Key Sorted Order
 (KSO, no sorting function can be specified, but you can specify a transform to
-apply on the key before comparison (e.g. string.lower)
+apply on the key before comparison (e.g. string.lower)).
 
 Usage:
 
@@ -29,21 +29,29 @@ please note the underscore which is new since version 0.3
 
 This module has been tested under:
 
-┌────────────┬─────────┬──────┐
-│OS          │compiler │Python│
-├────────────┼─────────┼──────┤
-│Ubuntu 8.10 │gcc 4.3.2│2.6.1 │
-├────────────┼─────────┼──────┤
-│Ubuntu 8.10 │gcc 4.3.2│2.5.4 │
-├────────────┼─────────┼──────┤
-│Ubuntu 8.10 │gcc 4.3.2│2.4.6 │
-└────────────┴─────────┴──────┘
+┌────────────┬───────────────────────┬──────┐
+│OS          │compiler               │Python│
+├────────────┼───────────────────────┼──────┤
+│Ubuntu 12.04│gcc 4.6.3              │2.7.3 │
+├────────────┼───────────────────────┼──────┤
+│Ubuntu 8.04 │gcc 4.2.4              │2.6.4 │
+├────────────┼───────────────────────┼──────┤
+│Ubuntu 8.04 │gcc 4.2.4              │2.5.2 │
+├────────────┼───────────────────────┼──────┤
+│Windows XP  │Visual C++ 2008 Express│2.7.3 │
+├────────────┼───────────────────────┼──────┤
+│Windows XP  │Visual C++ 2008 Express│2.6.5 │
+└────────────┴───────────────────────┴──────┘
 
 Older versions of this module has been tested under and I expect those to still
 work:
 
 ┌───────────┬──────────────────┬──────┐
 │OS         │compiler          │Python│
+├───────────┼──────────────────┼──────┤
+│Ubuntu 8.10│gcc 4.3.2         │2.5.4 │
+├───────────┼──────────────────┼──────┤
+│Ubuntu 8.10│gcc 4.3.2         │2.4.6 │
 ├───────────┼──────────────────┼──────┤
 │Ubuntu 7.04│gcc 4.1.2         │2.5.1 │
 ├───────────┼──────────────────┼──────┤
@@ -70,7 +78,7 @@ To install the package unzip/untar and run:
 
 python setup.py install
 
-For Windows users without a compiler, the .pyd file for Python 2.5.1 has been
+For Windows users without a compiler, the .pyd file for Python 2.7.3 has been
 included in the .zip download. Just copy that into your site-packages
 directory.
 
@@ -84,7 +92,7 @@ Functionality
 
 ordereddict has all of the functionality of dict() except that there is no
 keyword based initialisation and that you cannot pass a normal dict to the
-initialisation of the basic ordereddict (however see the relaxed keyword
+initialisation of the basic ordereddict (however see the relax-ed keyword
 below). sorteddict cannot be initialised from keywords either, but can be
 initialised from normal dict (ie. they are always relaxed).
 
@@ -151,22 +159,45 @@ and ordereddict only also has:
   • .rename(oldkey, newkey) renames a key, but keeps the items position and
     value
 
+The new OrderedDict in the standard collections module
+
+With Python 3.1 and backported to 2.7 there is an OrderedDict class available
+in the collections modules. Raymond Hettinger indicated in 2009 at EuroPython
+that he preferred to start from a minimal OrderedDict instead of using the
+Larosa/Foord implementation. Unfortunately the available tests (for the
+functionality that the simple collections.OrderedDict supports) were not used
+either resulting in preventable bugs like repr initially not working on
+recursive OrderedDicts.
+
+ordereddict (and the Larosa/Foord implementation) is essentially a superset of
+collections.OrderedDict, but there are a few differences:
+
+  • OrderedDict is by default relax-ed.
+  • repr of recursive OrderedDict does not give any indication of the value of
+    the recursive key, as it only displays .... ordereddict displays
+    ordereddict([...]) as value. Just using the dots like OrderedDict does is
+    going to be ambiguous as soon as you have two different types A and B and
+    nest A in B in A or B in B in A.
+  • some newer build-in functions available in OrderedDict are not available in
+    ordereddict ( __reversed__, viewkeys, viewvalues, viewitems).
+
+All of the differences can be straightened out in small (70 lines of Python)
+OrderedDict wrapper around ordereddict. With this wrapper the OrderedDict tests
+in the standard test_collections.py all pass.
+
 Testing
 
 testordereddict.py in the test subdirectory has been used to test the module.
-This is best run with py.test (http://codespeak.net/py/dist/test.html):
+You can use:
 
-py.test testordereddict.py
+    python testordereddict
 
-but if you do not use py.test (yet), you can also use:
-
-python testordereddict
-
-to run a large part of the tests as well.
+to run the tests (py.test support has been dropped as newer versions of py.test
+were not compatible).
 
 There is a somewhat patched copy of the python lib/Test dictionary testing
-routines included as well, it fails on the _update test however. You can run it
-with:
+routines included as well, it fails on the _update test however because the
+default is not to use a relaxed ordereddict. You can run it with:
 
 cd test/unit
 python test_dict.py
@@ -196,7 +227,7 @@ To Consider
     ordereddict
   • test on older versions (< 2.4) of Python and make portable (if this can be
     done without too much clutter) or port.
-  • test on the Mac (when I get my G4 powersupply back up and running)
+  • test on the Mac
   • optimise searching for an item pointer for sorteddict with binary search
     (for deletion)
 
@@ -212,8 +243,8 @@ structure and keeps this vector compact (and in order) so indexing is fast. The
 elements do not know about their position (so nothing needs to be updated there
 if that position changes, but then finding an item's index is expensive.
 Insertion/deletion is also relatively expensive in that on average half of the
-vector of pointers needs to be memmove-d one position. There is also an long
-for bit info like kvio, relaxed.
+vector of pointers needs to be memmove-d one position. There is also a long
+value for bit info like kvio, relaxed.
 
 The sorteddict structure has an additional 3 pointers of which only one
 (sd_key) is currently used (the others are sd_cmp and sd_value).
@@ -271,14 +302,23 @@ I have special routine for YAML files that takes lines like:
     - val3b
 
 (i.e. a list of key-value pairs) directly to a single ordered dictionary and
-back. (I find it kind of strange to finally have a structured, human readeable
-format, format that does not try to preserve the order of key-value pairs so
-that comparing files is difficult with 'standard' text tools).
+back. (I find it kind of strange to finally have a structured, human readeable,
+format that does not try to preserve the order of key-value pairs so that
+comparing files is difficult with 'standard' text tools).
 
 History
 
-0.4.3  2009-04-03
-Changed ordereddict.h so things now work on Python 2.6.1
+0.4.5  2012-06-17
+Fix for a bug while inserting last item again beyond last position (reported
+by Volkan Çetin / volki tolki ( cetinv at gmail.com )
+Fix for repeated deletion and insertion fail. Found by and solution provided
+by Darren Dowker (including tests). Also found by Fabio Zadronzy (including
+a less elegant fix).
+applied reindent to .py and astyle to .c files
+
+0.4.3  2009-05-11
+Fix for a bug in slicing SortedDicts.
+Found by, and fix provided by, Migel Anguel (linos.es)
 
 0.4.2  2009-03-27
 Bug found and by Alexandre Andrade and Fabio Zadrozny in

@@ -24,7 +24,7 @@ def test0():
     x['hijk'] = 7
     x['ijkl'] = 8
     x['jklm'] = 9
-    
+
 
 def test1():
     x = relaxed_ordereddict1()
@@ -38,11 +38,11 @@ def test1():
     x['hijk'] = 7
     x['ijkl'] = 8
     x['jklm'] = 9
-    
+
 def test2():
     _ordereddict.relax(True)
-    x = relaxed_ordereddict1(abcd=0, bcde= 1, cdef = 2, defg = 3, efgh = 4, fghi = 5, ghij = 6, 
-             hijk = 7, ijkl = 8, 
+    x = relaxed_ordereddict1(abcd=0, bcde= 1, cdef = 2, defg = 3, efgh = 4, fghi = 5, ghij = 6,
+             hijk = 7, ijkl = 8,
              jklm = 9)
 
 
@@ -53,5 +53,3 @@ if __name__ == 'x__main__':
     elif sys.argv[1] == 1:
         print test1
         test1()
-
-    

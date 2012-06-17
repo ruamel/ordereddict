@@ -5,7 +5,7 @@ import sys
 
 import _ordereddict
 import odict
-import ta   
+import ta
 
 LOOP=10000
 MINOF=10
@@ -35,7 +35,7 @@ def do_time():
                 res = None
                 print '--------',
             else:
-                t = timeit.Timer("ta.timeall(%s).%s()" % (testdict, funname), 
+                t = timeit.Timer("ta.timeall(%s).%s()" % (testdict, funname),
                              "import ta, _ordereddict, odict")
                 res = min(t.repeat(MINOF, LOOP))
                 print '%8.3f' % (res,),
@@ -46,18 +46,17 @@ def do_time():
     for f, (x, y, z) in results.iteritems():
         print f,
         if x is None:
-            print '--------', 
+            print '--------',
         else:
             print '%8.3f' % (x / y),
         print '   1.000',
         if x is None:
-            print '--------', 
+            print '--------',
         else:
             print '%8.3f' % (z / y)
-        
-        
-        
-    
+
+
+
+
 if __name__ == "__main__":
     do_time()
-    

@@ -1,7 +1,7 @@
 import unittest
 import test_support
 
-from ordereddict import ordereddict
+from _ordereddict import ordereddict
 
 import sys, UserDict, cStringIO
 

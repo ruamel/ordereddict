@@ -157,42 +157,42 @@ def deepcopy(x, memo=None, _nil=[]):
         return y
 
     #print 'deepcopy'
-    print '>>> a1', sys.getrefcount(None)
+    #print '>>> a1', sys.getrefcount(None)
     cls = type(x)
 
     copier = _deepcopy_dispatch.get(cls)
     if copier:
-        print '>>> copier', sys.getrefcount(None), x
+        #print '>>> copier', sys.getrefcount(None), x
         y = copier(x, memo)
     else:
-        print '>>> no copier', sys.getrefcount(None), x
+        #print '>>> no copier', sys.getrefcount(None), x
         try:
             issc = issubclass(cls, type)
-            print '>>> subclass', sys.getrefcount(None), x
+            #print '>>> subclass', sys.getrefcount(None), x
         except TypeError: # cls is not a class (old Boost; see SF #502085)
             issc = 0
         if issc:
             y = _deepcopy_atomic(x, memo)
-            print '>>> issc', sys.getrefcount(None)
+            #print '>>> issc', sys.getrefcount(None)
         else:
             copier = getattr(x, "__deepcopy__", None)
             if copier:
-                print '>>>> private deepcopy'
+                #print '>>>> private deepcopy'
                 y = copier(memo)
             else:
                 reductor = dispatch_table.get(cls)
                 if reductor:
-                    print '>>>> reductor found'
+                    #print '>>>> reductor found'
                     rv = reductor(x)
                 else:
                     reductor = getattr(x, "__reduce_ex__", None)
                     if reductor:
-                        print '>>>> reduc_ex found'
+                        #print '>>>> reduc_ex found'
                         rv = reductor(2)
                     else:
                         reductor = getattr(x, "__reduce__", None)
                         if reductor:
-                            print '>>>> reduce func found'
+                            #print '>>>> reduce func found'
                             rv = reductor()
                         else:
                             raise Error(
@@ -261,7 +261,7 @@ d[tuple] = _deepcopy_tuple
 def _deepcopy_dict(x, memo):
     y = {}
     memo[id(x)] = y
-    print 'deepcopydict'
+    #print 'deepcopydict'
     for key, value in x.iteritems():
         y[deepcopy(key, memo)] = deepcopy(value, memo)
     return y

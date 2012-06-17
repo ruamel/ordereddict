@@ -8,7 +8,7 @@ class basetimeall(object):
             x[ch] = index
         assert len(x) == 26
         return x
-    
+
 class timeall(basetimeall):
     def __init__(self, typ):
         self.typ = typ
@@ -39,7 +39,7 @@ class timeall1(object):
 
     def time000_empty(self):
         pass
-    
+
     def time001_create_empty(self):
         x = self.typ()
 
@@ -57,7 +57,7 @@ class timeall1(object):
             x[ch] = index
         assert len(x) == 26
         return x
-    
+
     def time003_create_676_entry(self):
         x = self.typ()
         index = 0
@@ -67,7 +67,7 @@ class timeall1(object):
                 index += 1
         assert len(x) == 676
         return x
-        
+
 
     def _time004_create_17576_entry(self):
         # 17576 items
@@ -84,7 +84,7 @@ class timeall1(object):
     def time010_get_keys_from_26_entry(self):
         x = self.time002_create_26_entry()
         y = x.keys()
-        
+
     def time020_pop_5_items_26_entry(self):
         x = self.time002_create_26_entry()
         assert x.pop('f') == 5
@@ -93,7 +93,7 @@ class timeall1(object):
         assert x.pop('u') == 20
         assert x.pop('z') == 25
         assert len(x) == 21
-        
+
     def time021_pop_26_items_676_entry(self):
         x = self.time003_create_676_entry()
         for k in x.keys():
@@ -114,7 +114,7 @@ class timeall1(object):
 
     def time031nodict_popitem_100_676_entry(self):
         x = self.time003_create_676_entry()
-        i = x.popitem(100) 
+        i = x.popitem(100)
         assert i[1] == 100
         assert len(x) == 675
 
