@@ -1,11 +1,12 @@
-
 syntax: glob
 
 *.pyc
 *~
 *.bak
 *.o
-dist
+*.orig
 build
+tmp
+dist
 *.egg-info
 .tox
