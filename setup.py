@@ -1,14 +1,13 @@
 
 if __name__ == '__main__':
-    print('blalewrlke')
     from distutils.core import setup, Extension
 
     module1 = Extension('_ordereddict',
-                        sources = ['ordereddict.c'],
+                        sources = ['ordereddict.c',],
                        )
 
-version = [0, 4, 6]
-verstion_str = '.'.join(version)
+version = [0, 4, 6, 'dev1']
+version_str = '.'.join([str(x) for x in version])
 
 long_description = """
 A derivation of the pyton dictobject.c module that implements

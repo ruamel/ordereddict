@@ -1,0 +1,3 @@
+recursive-include test *.py
+include ordereddict.h
+include tox.ini

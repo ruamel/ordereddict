@@ -10,3 +10,4 @@ tmp
 dist
 *.egg-info
 .tox
+MANIFEST
