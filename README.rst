@@ -12,7 +12,7 @@ installable from PyPI.
 
 ----
 
-:Version: ordereddict 0.4.6-a1
+:Version: ordereddict 0.4.6-dev2
 :Author:  Anthon van der Neut
 :Contact: anthon@mnt.org
 :Date:    2014-01-02
@@ -332,6 +332,10 @@ order of key-value pairs so that comparing files is difficult with
 
 History
 -------
+| ``0.4.6  2014-01-18``
+| Move to ruamel namespace, hosted on bitbucket, MIT License
+| Testing with tox
+|
 | ``0.4.5  2012-06-17``
 | Fix for a bug while inserting last item again beyond last position (reported
 | by Volkan Çetin / volki tolki ( cetinv at gmail.com )

@@ -11,7 +11,7 @@
   Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007  Python Software
   Foundation; All Rights Reserved"
 
-  2007-10-13: Anthon van der Neut
+  Copyrigh (c) 2007-10-13 onwards: Anthon van der Neut
 */
 
 /*

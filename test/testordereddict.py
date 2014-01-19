@@ -1,3 +1,4 @@
+# coding: utf-8
 
 if __name__ != "__main__":
     import py
@@ -7,7 +8,7 @@ import sys
 import cPickle
 import random
 
-from _ordereddict import ordereddict, sorteddict
+from ruamel.ordereddict import ordereddict, sorteddict
 
 class TestOrderedDict(object):
     def __init__(self, nopytest=False):
@@ -719,7 +720,7 @@ class TestOrderedDict(object):
         x = repr(s)
         assert x == "sorteddict([(0, 'foo'), (2, 'bar')])"
 
-    def test_deepcopy(self): # found thanks to Alexandre Andrade
+    def test_deepcopy2(self): # found thanks to Alexandre Andrade
         import copy
         import gc
         d = ordereddict([(1, 2)])
