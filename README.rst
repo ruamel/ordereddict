@@ -2,14 +2,6 @@
 ordereddict
 ===========
 
-http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
-ordereddict's home on the web.
-
-There you can still find the links for downloading the older version (0.4.5).
-
-This package is currently in transition to be hosted on BitBucket and 
-installable from PyPI. 
-
 ----
 
 :Version: ordereddict 0.4.6
@@ -31,6 +23,10 @@ Sorted dictionaries are also provided. Currently only with Key Sorted
 Order (KSO, no sorting function can be specified, but you can specify a
 transform to apply on the key before comparison (e.g. string.lower)).
 
+This package is hosted on BitBucket and installable from PyPI::
+
+  pip install ruamel.ordereddict
+
 Usage::
 
   from ruamel.ordereddict import ordereddict
@@ -40,7 +36,6 @@ Usage::
   d = ordereddict({'a':1, 'b': 2}, relax=True)
   sd = sorteddict({'a':1, 'b': 2}) # sorteddict is always relaxed
 
-*please note the underscore which is new since version 0.3*
 
 This module has been tested under:
 
@@ -80,6 +75,11 @@ Home
 https://bitbucket.org/ruamel/ordereddict is ordereddict's home on the web.
 
 Clone the repository there if you want to work from the source.
+
+http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
+ordereddict's home on the web.  
+There you can still find the links for downloading the older version (0.4.5).
+
 
 
 Installation
