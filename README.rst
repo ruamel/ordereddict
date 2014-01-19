@@ -36,6 +36,8 @@ Usage::
   d = ordereddict({'a':1, 'b': 2}, relax=True)
   sd = sorteddict({'a':1, 'b': 2}) # sorteddict is always relaxed
 
+* please not that starting with 0.4.6 you should not import _ordereddict
+directly*
 
 This module has been tested under:
 
