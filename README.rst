@@ -5,17 +5,19 @@ ordereddict
 http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
 ordereddict's home on the web.
 
-There you can still find the links for downloading the latest versions.
+There you can still find the links for downloading the older version (0.4.5).
 
 This package is currently in transition to be hosted on BitBucket and 
 installable from PyPI. 
 
 ----
 
-:Version: ordereddict 0.4.6-dev2
+:Version: ordereddict 0.4.6
 :Author:  Anthon van der Neut
-:Contact: anthon@mnt.org
-:Date:    2014-01-02
+:Contact: a.van.der.neut@ruamel.eu
+:Date:    2014-01-19
+
+.. image:: https://travis-ci.org/ruamel/ordereddict.png?branch=master  
 
 The ordereddict module in short
 -------------------------------
@@ -31,7 +33,7 @@ transform to apply on the key before comparison (e.g. string.lower)).
 
 Usage::
 
-  from _ordereddict import ordereddict
+  from ruamel.ordereddict import ordereddict
   kio = ordereddict()
   kvio = ordereddict(kvio=True)
   # without relax unordered initalisation is not allowed
@@ -383,7 +385,7 @@ History
 | This version was never released. While testing it I was far in writing
 | an email to comp.lang.python about why timing with timeit did seem to
 | be memory hungry ....
-| and then I realiased ordereddict had a memory leak %-)
+| and then I realised ordereddict had a memory leak %-)
 |
 
 
