@@ -56,7 +56,5 @@ def do_time():
             print '%8.3f' % (z / y)
 
 
-
-
 if __name__ == "__main__":
     do_time()

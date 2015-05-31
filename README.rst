@@ -27,6 +27,8 @@ This package is hosted on BitBucket and installable from PyPI::
 
   pip install ruamel.ordereddict
 
+For Windows there are 32 and 64 bit installable wheels available.
+
 Usage::
 
   from ruamel.ordereddict import ordereddict
@@ -36,40 +38,51 @@ Usage::
   d = ordereddict({'a':1, 'b': 2}, relax=True)
   sd = sorteddict({'a':1, 'b': 2}) # sorteddict is always relaxed
 
-* please not that starting with 0.4.6 you should not import _ordereddict
-directly*
+**please note that starting with 0.4.6 you should not import _ordereddict
+directly**
 
 This module has been tested under:
 
-============  ========================= ======
-OS            compiler                  Python
-Ubuntu 12.04  gcc 4.6.3                 2.7.3
-Ubuntu  8.04  gcc 4.2.4                 2.6.4
-Ubuntu  8.04  gcc 4.2.4                 2.5.2
-Windows XP    Visual C++ 2008 Express   2.7.3
-Windows XP    Visual C++ 2008 Express   2.6.5
-Windows       MingGW 4.7.0              2.7.3
-Solaris 10    GCC 4.4.x                 2.7.3
-============  ========================= ======
-
-MingGW and Solaris were tested and reported to work by Wladimir with version
-0.4.5
+=============  ========================= ==========
+OS             compiler                  Python
+Linux Mint 17  gcc 4.8.2                 2.7.10
+Linux Mint 17  gcc 4.8.2                 2.6.9
+Windows XP-64  Visual Studio 2008        2.7.10-32
+Windows XP-64  Visual Studio 2008        2.7.10-64
+Windows XP-64  Visual Studio 2010        2.6.9-32
+Windows XP-64  Visual Studio 2010        2.6.9-64
+=============  ========================= ==========
 
 Older versions of this module has been tested under
 and I expect those to still work:
 
 ============  ========================= ======
 OS            compiler                  Python
+Ubuntu 12.04   gcc 4.7.2                 2.7.6
+Ubuntu 12.04   gcc 4.7.2                 2.6.8
+Ubuntu  8.04   gcc 4.2.4                 2.7.6
+Ubuntu  8.04   gcc 4.2.4                 2.5.2
+Windows XP     Visual C++ 2008 Express   2.7.6
+Windows 7 64   Windows SDK for Win7 SP1  2.7.6
+Ubuntu 12.04   gcc 4.6.3                 2.7.3
+Ubuntu  8.04   gcc 4.2.4                 2.6.4
+Ubuntu  8.04   gcc 4.2.4                 2.5.2
 Ubuntu  8.10  gcc 4.3.2                 2.5.4
 Ubuntu  8.10  gcc 4.3.2                 2.4.6
 Ubuntu  7.04  gcc 4.1.2                 2.5.1
 Ubuntu  7.04  gcc 4.1.2                 2.4.4
 Ubuntu  6.06  gcc                       2.5.1
 Windows XP    Visual Studio 2003        2.5.1
+Windows XP     Visual C++ 2008 Express   2.6.5
+Windows        MingGW 4.7.0              2.7.3
+Solaris 10     GCC 4.4.x                 2.7.3
 ============  ========================= ======
 
 Version 0.4.1 was tested and found working on SuSE Linux Enterprise Server
 (GCC 4.1.0 and Intel C/C++ 10.1) by Stuart Stock.
+
+MingGW and Solaris were tested and reported to work by Wladimir with version
+0.4.5
 
 Home
 ----------------------------
@@ -336,6 +349,12 @@ order of key-value pairs so that comparing files is difficult with
 
 History
 -------
+| ``0.4.8  2015-05-31``
+| dependent on ruamel.base
+| version number in a single place
+| using py.test under tox
+| generate wheel for 32/64bit py26/py27 on windows
+|
 | ``0.4.6  2014-01-18``
 | Move to ruamel namespace, hosted on bitbucket, MIT License
 | Testing with tox
