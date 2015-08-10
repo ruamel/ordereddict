@@ -1328,13 +1328,13 @@ dict_ass_slice(PyOrderedDictObject *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
     if (value != NULL) {
         if  (PyObject_Length(value) != (ihigh - ilow)) {
             PyErr_SetString(PyExc_ValueError,
-                            "slice assigment: wrong size"
+                            "slice assignment: wrong size"
                            );
             return -1;
         }
         if (!PyOrderedDict_CheckExact(value)) {
             PyErr_SetString(PyExc_TypeError,
-                            "slice assigment: argument must be ordereddict"
+                            "slice assignment: argument must be ordereddict"
                            );
             return -1;
         }
@@ -1373,7 +1373,7 @@ dict_ass_slice(PyOrderedDictObject *self, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
         /* assignment first delete slice */
         /* then delete any items whose keys are in itereable that are already in */
         PyErr_SetString(PyExc_NotImplementedError,
-                        "ordered dictionary does not support slice assigment"
+                        "ordered dictionary does not support slice assignment"
                        );
         result = -1;
     }

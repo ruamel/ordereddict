@@ -178,10 +178,10 @@ and ordereddict only also has:
   so that afterwards .index(key) == position, if the key was already there
   the original position (and value) is lost to the new position. This often
   means moving keys to new positions!
-- slice deletion/assigment:
+- slice deletion/assignment:
    - stepped deletion could be optimized a bit (individual items are deleted
      which can require memmoving multiple items)
-   - assigment only from OrderedDict (with the same length as the slice). This
+   - assignment only from OrderedDict (with the same length as the slice). This
      could also be optimised as I first delete, then insert individual items.
      If the assigned items contain keys that are still there after the deletion
      'phase' then retrieving that slice does not always give the original
@@ -387,7 +387,7 @@ History
 | sense (eg. slice assignment, rename, setkeys)
 |
 | ``0.3   2007-10-24``
-| added setkeys/setvalues/setitems; slice retrieval, deletion, assigment
+| added setkeys/setvalues/setitems; slice retrieval, deletion, assignment
 | .rename(oldkey, newkey) rename a key keeping same value and position
 | .index() of non-existing key now returns ValueError instead of SystemError
 | Changed the module name to _ordereddict (from ordereddict), as Jason
