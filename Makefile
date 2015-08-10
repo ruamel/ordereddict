@@ -1,6 +1,6 @@
 
 UTILNAME:=ordereddict
-PKGNAME:=ruamel.std.argparse
+PKGNAME:=ruamel.$(UTILNAME)
 VERSION:=$$(python setup.py --version)
 REGEN:=/usr/local/bin/ruamel_util_new util --published OrderedDict --skip-util --skip-hg
 
