@@ -349,6 +349,9 @@ order of key-value pairs so that comparing files is difficult with
 
 History
 -------
+| ``0.4.9  2015-05-31``
+| typos fixed by Gianfranco Costamagna
+| 
 | ``0.4.8  2015-05-31``
 | dependent on ruamel.base
 | version number in a single place
