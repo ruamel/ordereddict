@@ -3436,7 +3436,7 @@ dictiter_new(PyOrderedDictObject *dict, PyTypeObject *itertype,
             return NULL;
 
     /* review: introduce GC_New */
-    di = PyObject_New(ordereddictiterobject, itertype);
+    di = PyObject_GC_New(ordereddictiterobject, itertype);
     if (di == NULL)
         return NULL;
     Py_INCREF(dict);
@@ -3458,6 +3458,7 @@ dictiter_new(PyOrderedDictObject *dict, PyTypeObject *itertype,
         }
     } else
         di->di_result = NULL;
+    _PyObject_GC_TRACK(di);
     return (PyObject *)di;
 }
 
@@ -3466,7 +3467,7 @@ dictiter_dealloc(ordereddictiterobject *di)
 {
     Py_XDECREF(di->di_dict);
     Py_XDECREF(di->di_result);
-    PyObject_Del(di);
+    PyObject_GC_Del(di);
 }
 
 static int
@@ -3550,7 +3551,7 @@ PyTypeObject PyOrderedDictIterKey_Type = {
     PyObject_GenericGetAttr,		/* tp_getattro */
     0,					/* tp_setattro */
     0,					/* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,			/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,	/* tp_flags */
     0,					/* tp_doc */
     (traverseproc)dictiter_traverse,    /* tp_traverse */
     0,					/* tp_clear */
@@ -3617,7 +3618,7 @@ PyTypeObject PyOrderedDictIterValue_Type = {
     PyObject_GenericGetAttr,		/* tp_getattro */
     0,					/* tp_setattro */
     0,					/* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,			/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,	/* tp_flags */
     0,					/* tp_doc */
     (traverseproc)dictiter_traverse,    /* tp_traverse */
     0,					/* tp_clear */
@@ -3701,7 +3702,7 @@ PyTypeObject PyOrderedDictIterItem_Type = {
     PyObject_GenericGetAttr,		/* tp_getattro */
     0,					/* tp_setattro */
     0,					/* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT,			/* tp_flags */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,	/* tp_flags */
     0,					/* tp_doc */
     (traverseproc)dictiter_traverse,    /* tp_traverse */
     0,					/* tp_clear */
