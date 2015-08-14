@@ -165,7 +165,7 @@ static int numfree = 0;
 void
 PyDict_Fini(void)
 {
-    PyDictObject *op;
+    PyOrderedDictObject *op;
 
     while (numfree) {
         op = free_list[--numfree];
@@ -447,28 +447,70 @@ dump_otablep(register PyOrderedDictObject *mp)
     }
 }
 
+#if PY_VERSION_HEX < 0x02070000
+#define MAINTAIN_TRACKING(mp, key, value)
+#define _PyDict_MaybeUntrack(x)
+#else
+#ifdef SHOW_TRACK_COUNT
+#define INCREASE_TRACK_COUNT \
+    (count_tracked++, count_untracked--);
+#define DECREASE_TRACK_COUNT \
+    (count_tracked--, count_untracked++);
+#else
+#define INCREASE_TRACK_COUNT
+#define DECREASE_TRACK_COUNT
+#endif
+
+#define MAINTAIN_TRACKING(mp, key, value) \
+    do { \
+        if (!_PyObject_GC_IS_TRACKED(mp)) { \
+            if (_PyObject_GC_MAY_BE_TRACKED(key) || \
+                _PyObject_GC_MAY_BE_TRACKED(value)) { \
+                _PyObject_GC_TRACK(mp); \
+                INCREASE_TRACK_COUNT \
+            } \
+        } \
+    } while(0)
+
+void
+_PyDict_MaybeUntrack(PyObject *op)
+{
+    PyDictObject *mp;
+    PyObject *value;
+    Py_ssize_t mask, i;
+    PyDictEntry *ep;
+
+    if (!PyDict_CheckExact(op) || !_PyObject_GC_IS_TRACKED(op))
+        return;
+
+    mp = (PyDictObject *) op;
+    ep = mp->ma_table;
+    mask = mp->ma_mask;
+    for (i = 0; i <= mask; i++) {
+        if ((value = ep[i].me_value) == NULL)
+            continue;
+        if (_PyObject_GC_MAY_BE_TRACKED(value) ||
+            _PyObject_GC_MAY_BE_TRACKED(ep[i].me_key))
+            return;
+    }
+    DECREASE_TRACK_COUNT
+    _PyObject_GC_UNTRACK(op);
+}
+#endif
+
 /*
-Internal routine to insert a new item into the table.
-Used both by the internal resize routine and by the public insert routine.
-Eats a reference to key and one to value.
-Returns -1 if an error occurred, or 0 on success.
+Internal routine to insert a new item into the table when you have entry object.
+Used by insertdict.
 */
 static int
-insertdict(register PyOrderedDictObject *mp, PyObject *key, long hash,
-           PyObject *value, Py_ssize_t index)
+insertdict_by_entry(register PyOrderedDictObject *mp, PyObject *key, long hash,
+                    PyOrderedDictEntry *ep, PyObject *value, Py_ssize_t index)
 {
     PyObject *old_value;
     Py_ssize_t oindex;
-    register PyOrderedDictEntry *ep, **epp = NULL;
-    typedef PyOrderedDictEntry *(*lookupfunc)(PyOrderedDictObject *, PyObject *, long);
+    register PyOrderedDictEntry **epp = NULL;
 
-    assert(mp->ma_lookup != NULL);
-    ep = mp->ma_lookup(mp, key, hash);
-    if (ep == NULL) {
-        Py_DECREF(key);
-        Py_DECREF(value);
-        return -1;
-    }
+    MAINTAIN_TRACKING(mp, key, value);
     if (ep->me_value != NULL) { /* updating a value */
         old_value = ep->me_value;
         ep->me_value = value;
@@ -525,16 +567,33 @@ insertdict(register PyOrderedDictObject *mp, PyObject *key, long hash,
     return 0;
 }
 
+/*
+Internal routine to insert a new item into the table.
+Used both by the internal resize routine and by the public insert routine.
+Eats a reference to key and one to value.
+Returns -1 if an error occurred, or 0 on success.
+*/
+static int
+insertdict(register PyOrderedDictObject *mp, PyObject *key, long hash,
+           PyObject *value, Py_ssize_t index)
+{
+    register PyOrderedDictEntry *ep; 
+
+    assert(mp->ma_lookup != NULL);
+    ep = mp->ma_lookup(mp, key, hash);
+    if (ep == NULL) {
+        Py_DECREF(key);
+        Py_DECREF(value);
+        return -1;
+    }
+    return insertdict_by_entry(mp, key, hash, ep, value, index);
+}
+
 static int
 insertsorteddict(register PyOrderedDictObject *mp, PyObject *key, long hash,
                  PyObject *value)
 {
-    PyObject *old_value;
-    Py_ssize_t index = 0, lower, upper;
-    int res;
-    register PySortedDictObject *sd = (PySortedDictObject *) mp;
-    register PyOrderedDictEntry *ep, **epp = NULL;
-    typedef PyOrderedDictEntry *(*lookupfunc)(PyOrderedDictObject *, PyObject *, long);
+    register PyOrderedDictEntry *ep;
 
     /* printf("insert sorted dict\n"); */
     assert(mp->ma_lookup != NULL);
@@ -544,6 +603,11 @@ insertsorteddict(register PyOrderedDictObject *mp, PyObject *key, long hash,
         Py_DECREF(value);
         return -1;
     }
+    PyObject *old_value;
+    Py_ssize_t index = 0, lower, upper;
+    int res;
+    register PySortedDictObject *sd = (PySortedDictObject *) mp;
+    register PyOrderedDictEntry **epp = NULL;
     if (ep->me_value != NULL) { /* updating a value */
         old_value = ep->me_value;
         ep->me_value = value;
