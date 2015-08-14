@@ -1,15 +1,3 @@
-===========
-ordereddict
-===========
-
-----
-
-:Version: ordereddict 0.4.6
-:Author:  Anthon van der Neut
-:Contact: a.van.der.neut@ruamel.eu
-:Date:    2014-01-19
-
-.. image:: https://travis-ci.org/ruamel/ordereddict.png?branch=master  
 
 The ordereddict module in short
 -------------------------------
@@ -17,7 +5,8 @@ The ordereddict module in short
 This is an implementation of an ordered dictionary with Key Insertion
 Order (KIO: updates of values do not affect the position of the key),
 Key Value Insertion Order (KVIO, an existing key's position is removed
-and put at the back).
+and put at the back). The standard library module OrderedDict, implemented
+later, implements a subset of ``ordereddict`` functionality.
 
 Sorted dictionaries are also provided. Currently only with Key Sorted
 Order (KSO, no sorting function can be specified, but you can specify a
@@ -347,9 +336,18 @@ human readeable, format that does not try to preserve the
 order of key-value pairs so that comparing files is difficult with
 'standard' text tools).
 
+Older versions
+--------------
+
+http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
+ordereddict's home on the web.
+
+There you can still find the links for downloading the older version (0.4.5).
+
+
 History
 -------
-| ``0.4.9  2015-05-31``
+l ``0.4.9  2015-08-10``
 | typos fixed by Gianfranco Costamagna
 | 
 | ``0.4.8  2015-05-31``

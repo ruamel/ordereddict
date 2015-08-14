@@ -29,9 +29,7 @@ Ordering by key insertion order (KIO) instead of key/val insertion order
 #endif
 
 #if PY_VERSION_HEX < 0x02080000
-#define Py_Type(ob)            (((PyObject*)(ob))->ob_type)
-#else
-#define Py_Type Py_TYPE
+#define Py_TYPE(ob)            (((PyObject*)(ob))->ob_type)
 #endif
 
 #ifdef NDEBUG
@@ -100,6 +98,24 @@ show_counts(void)
 }
 #endif
 
+/* Debug statistic to compare allocations with reuse through the free list */
+#undef SHOW_ALLOC_COUNT
+#ifdef SHOW_ALLOC_COUNT
+static size_t count_alloc = 0;
+static size_t count_reuse = 0;
+
+static void
+show_alloc(void)
+{
+    fprintf(stderr, "Dict allocations: %" PY_FORMAT_SIZE_T "d\n",
+        count_alloc);
+    fprintf(stderr, "Dict reuse through freelist: %" PY_FORMAT_SIZE_T
+        "d\n", count_reuse);
+    fprintf(stderr, "%.2f%% reuse rate\n\n",
+        (100.0*count_reuse/(count_alloc+count_reuse)));
+}
+#endif
+
 /* Initialization macros.
    There are two ways to create a dict:  PyOrderedDict_New() is the main C API
    function, and the tp_new slot maps to dict_new().  In the latter case we
@@ -140,35 +156,63 @@ show_counts(void)
 #define REVERSE(mp)	(mp->od_state & OD_REVERSE_BIT)
 
 /* Dictionary reuse scheme to save calls to malloc, free, and memset */
-#define MAXFREEDICTS 80
-static PyOrderedDictObject *free_dicts[MAXFREEDICTS];
-static int num_free_dicts = 0;
+#ifndef PyDict_MAXFREELIST
+#define PyDict_MAXFREELIST 80
+#endif
+static PyOrderedDictObject *free_list[PyDict_MAXFREELIST];
+static int numfree = 0;
 
+void
+PyDict_Fini(void)
+{
+    PyDictObject *op;
+
+    while (numfree) {
+        op = free_list[--numfree];
+        assert(PyOrderedDict_CheckExact(op));
+        PyObject_GC_Del(op);
+    }
+}
 
 PyObject *
 PyOrderedDict_New(void)
 {
     register PyOrderedDictObject *mp;
-    assert(dummy != NULL);
-    if (num_free_dicts) {
-        mp = free_dicts[--num_free_dicts];
+    assert(dummy != NULL);   /* initialisation in the module init */
+#ifdef SHOW_CONVERSION_COUNTS
+    Py_AtExit(show_counts);
+#endif
+#ifdef SHOW_ALLOC_COUNT
+    Py_AtExit(show_alloc);
+#endif
+    if (numfree) {
+        mp = free_list[--numfree];
         assert (mp != NULL);
-        /* assert (mp->ob_type == &PyOrderedDict_Type); */
-        assert (Py_Type(mp) == &PyOrderedDict_Type);
+        assert (Py_TYPE(mp) == &PyOrderedDict_Type);
         _Py_NewReference((PyObject *)mp);
         if (mp->od_fill) {
             EMPTY_TO_MINSIZE(mp);
+        } else {
+	    /* At least set ma_table and ma_mask; these are wrong
+	       if an empty but presized dict is added to freelist */
+	    INIT_NONZERO_DICT_SLOTS(mp);
         }
         assert (mp->ma_used == 0);
         assert (mp->ma_table == mp->ma_smalltable);
         assert (mp->od_otablep == mp->ma_smallotablep);
         assert (mp->ma_mask == PyOrderedDict_MINSIZE - 1);
+#ifdef SHOW_ALLOC_COUNT
+        count_reuse++;
+#endif
     } else {
         mp = PyObject_GC_New(PyOrderedDictObject, &PyOrderedDict_Type);
         if (mp == NULL)
             return NULL;
         EMPTY_TO_MINSIZE(mp);
-    }
+#ifdef SHOW_ALLOC_COUNT
+        count_alloc++;
+#endif
+    } 
     mp->ma_lookup = lookdict_string;
 #ifdef SHOW_CONVERSION_COUNTS
     ++created;
@@ -194,7 +238,7 @@ PySortedDict_New(void)
 #ifdef SHOW_CONVERSION_COUNTS
     ++created;
 #endif
-    PyObject_GC_Track(mp);
+    PyObject_GC_Track(mp);   
     return (PyObject *)mp;
 }
 
@@ -244,7 +288,9 @@ lookdict(PyOrderedDictObject *mp, PyObject *key, register long hash)
     else {
         if (ep->me_hash == hash) {
             startkey = ep->me_key;
+	    Py_INCREF(startkey);
             cmp = PyObject_RichCompareBool(startkey, key, Py_EQ);
+	    Py_DECREF(startkey);
             if (cmp < 0)
                 return NULL;
             if (ep0 == mp->ma_table && ep->me_key == startkey) {
@@ -273,7 +319,9 @@ lookdict(PyOrderedDictObject *mp, PyObject *key, register long hash)
             return ep;
         if (ep->me_hash == hash && ep->me_key != dummy) {
             startkey = ep->me_key;
+	    Py_INCREF(startkey);
             cmp = PyObject_RichCompareBool(startkey, key, Py_EQ);
+	    Py_DECREF(startkey);
             if (cmp < 0)
                 return NULL;
             if (ep0 == mp->ma_table && ep->me_key == startkey) {
@@ -709,6 +757,25 @@ dictresize(PyOrderedDictObject *mp, Py_ssize_t minused)
     return 0;
 }
 
+
+/* Create a new dictionary pre-sized to hold an estimated number of elements.
+   Underestimates are okay because the dictionary will resize as necessary.
+   Overestimates just mean the dictionary will be more sparse than usual.
+*/
+
+PyObject *
+_PyOrderedDict_NewPresized(Py_ssize_t minused)
+{
+    PyObject *op = PyOrderedDict_New();
+
+    if (minused>5 && op != NULL && dictresize((PyOrderedDictObject *)op, minused) == -1) {
+        Py_DECREF(op);
+        return NULL;
+    }
+    return op;
+}
+
+
 /* Note that, for historical reasons, PyOrderedDict_GetItem() suppresses all errors
  * that may occur (originally dicts supported only string keys, and exceptions
  * weren't possible).  So, while the original intent was that a NULL return
@@ -1035,6 +1102,7 @@ PyOrderedDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey, PyObject **p
     i = *ppos;
     if (i < 0)
         return 0;
+    /* review: not sure why different from 2.5.1 here. */
     if (i >= ((PyOrderedDictObject *)op)->ma_used)
         return 0;
     *ppos = i+1;
@@ -1094,10 +1162,10 @@ dict_dealloc(register PyOrderedDictObject *mp)
         PyMem_DEL(mp->ma_table);
         PyMem_DEL(mp->od_otablep);
     }
-    if (num_free_dicts < MAXFREEDICTS && Py_Type(mp) == &PyOrderedDict_Type)
-        free_dicts[num_free_dicts++] = mp;
+    if (numfree < PyDict_MAXFREELIST && Py_TYPE(mp) == &PyOrderedDict_Type)
+        free_list[numfree++] = mp;
     else
-        Py_Type(mp)->tp_free((PyObject *)mp);
+        Py_TYPE(mp)->tp_free((PyObject *)mp);
     Py_TRASHCAN_SAFE_END(mp)
 }
 
@@ -1116,11 +1184,15 @@ ordereddict_print(register PyOrderedDictObject *mp, register FILE *fp, register 
     if (status != 0) {
         if (status < 0)
             return status;
+        Py_BEGIN_ALLOW_THREADS
         fprintf(fp, "%sdict([...])", typestr);
+        Py_END_ALLOW_THREADS
         return 0;
     }
 
+    Py_BEGIN_ALLOW_THREADS
     fprintf(fp, "%sdict([", typestr);
+    Py_END_ALLOW_THREADS
     any = 0;
     epp = mp->od_otablep;
     for (i = 0; i < mp->ma_used; i++) {
@@ -1129,24 +1201,34 @@ ordereddict_print(register PyOrderedDictObject *mp, register FILE *fp, register 
            key format */
         Py_INCREF(pvalue);
         if (any++ > 0)
+            Py_BEGIN_ALLOW_THREADS
             fprintf(fp, ", ");
+	    Py_END_ALLOW_THREADS
+        Py_BEGIN_ALLOW_THREADS
         fprintf(fp, "(");
+	Py_END_ALLOW_THREADS
         if (PyObject_Print((PyObject *)((*epp)->me_key), fp, 0)!=0) {
             Py_DECREF(pvalue);
             Py_ReprLeave((PyObject*)mp);
             return -1;
         }
+        Py_BEGIN_ALLOW_THREADS
         fprintf(fp, ", ");
+	Py_END_ALLOW_THREADS
         if (PyObject_Print(pvalue, fp, 0) != 0) {
             Py_DECREF(pvalue);
             Py_ReprLeave((PyObject*)mp);
             return -1;
         }
         Py_DECREF(pvalue);
+        Py_BEGIN_ALLOW_THREADS
         fprintf(fp, ")");
+	Py_END_ALLOW_THREADS
         epp++;
     }
+    Py_BEGIN_ALLOW_THREADS
     fprintf(fp, "])");
+    Py_END_ALLOW_THREADS
     Py_ReprLeave((PyObject*)mp);
     return 0;
 }
@@ -1283,7 +1365,7 @@ dict_subscript(PyOrderedDictObject *mp, register PyObject *key)
             if (missing_str == NULL)
                 missing_str =
                     PyString_InternFromString("__missing__");
-            missing = _PyType_Lookup(Py_Type(mp), missing_str);
+            missing = _PyType_Lookup(Py_TYPE(mp), missing_str);
             if (missing != NULL)
                 return PyObject_CallFunctionObjArgs(missing,
                                                     (PyObject *)mp, key, NULL);
@@ -1663,8 +1745,6 @@ dict_fromkeys(PyObject *cls, PyObject *args)
     if (d == NULL)
         return NULL;
 
-
-#if PY_VERSION_HEX >= 0x02050000
     if ((PyOrderedDict_CheckExact(d) || PySortedDict_CheckExact(d)) && PyAnySet_CheckExact(seq)) {
         PyOrderedDictObject *mp = (PyOrderedDictObject *)d;
         Py_ssize_t pos = 0;
@@ -1682,11 +1762,6 @@ dict_fromkeys(PyObject *cls, PyObject *args)
         }
         return d;
     }
-#else
-    d = PyObject_CallObject(cls, NULL);
-    if (d == NULL)
-        return NULL;
-#endif
 
     it = PyObject_GetIter(seq);
     if (it == NULL) {
@@ -1694,6 +1769,25 @@ dict_fromkeys(PyObject *cls, PyObject *args)
         return NULL;
     }
 
+#ifndef OLD
+   if (PyOrderedDict_CheckExact(d) || PySortedDict_CheckExact(d)) {
+        while ((key = PyIter_Next(it)) != NULL) {
+            status = PyOrderedDict_SetItem(d, key, value);
+            Py_DECREF(key);
+            if (status < 0)
+                goto Fail;
+        }
+    } else {
+        while ((key = PyIter_Next(it)) != NULL) {
+            status = PyObject_SetItem(d, key, value);
+            Py_DECREF(key);
+            if (status < 0)
+                goto Fail;
+        }
+    }
+    if (PyErr_Occurred())
+        goto Fail;
+#else
     for (;;) {
         key = PyIter_Next(it);
         if (key == NULL) {
@@ -1707,6 +1801,7 @@ dict_fromkeys(PyObject *cls, PyObject *args)
             goto Fail;
     }
 
+#endif
     Py_DECREF(it);
     return d;
 
@@ -2261,8 +2356,14 @@ dict_richcompare(PyObject *v, PyObject *w, int op)
         if (cmp < 0)
             return NULL;
         res = (cmp == (op == Py_EQ)) ? Py_True : Py_False;
-    } else
-        res = Py_NotImplemented;
+    } else {
+         /* Py3K warning if comparison isn't == or !=  */
+         if (PyErr_WarnPy3k("dict inequality comparisons not supported "
+                            "in 3.x", 1) < 0) {
+             return NULL;
+         }
+         res = Py_NotImplemented;
+    }
     Py_INCREF(res);
     return res;
 }
@@ -2289,29 +2390,11 @@ dict_contains(register PyOrderedDictObject *mp, PyObject *key)
 static PyObject *
 dict_has_key(register PyOrderedDictObject *mp, PyObject *key)
 {
-#if PY_VERSION_HEX < 0x02060000
-    long hash;
-    PyOrderedDictEntry *ep;
-#endif
-
-#if PY_VERSION_HEX >= 0x02060000
     if (Py_Py3kWarningFlag &&
             PyErr_Warn(PyExc_DeprecationWarning,
                        "dict.has_key() not supported in 3.x") < 0)
         return NULL;
     return dict_contains(mp, key);
-#else
-    if (!PyString_CheckExact(key) ||
-            (hash = ((PyStringObject *) key)->ob_shash) == -1) {
-        hash = PyObject_Hash(key);
-        if (hash == -1)
-            return NULL;
-    }
-    ep = (mp->ma_lookup)(mp, key, hash);
-    if (ep == NULL)
-        return NULL;
-    return PyBool_FromLong(ep->me_value != NULL);
-#endif
 }
 
 static PyObject *
@@ -2445,11 +2528,7 @@ dict_popitem(PyOrderedDictObject *mp, PyObject *args)
      * tuple away if the dict *is* empty isn't a significant
      * inefficiency -- possible, but unlikely in practice.
      */
-#if PY_VERSION_HEX >= 0x02050000
     if (!PyArg_ParseTuple(args, "|n:popitem", &i))
-#else
-    if (!PyArg_ParseTuple(args, "|i:popitem", &i))
-#endif
         return NULL;
 
     res = PyTuple_New(2);
@@ -2530,6 +2609,17 @@ static PyObject *
 dict_iteritems(PyOrderedDictObject *dict, PyObject *args, PyObject *kwds)
 {
     return dictiter_new(dict, &PyOrderedDictIterItem_Type, args, kwds);
+}
+
+static PyObject *
+dict_sizeof(PyDictObject *mp)
+{
+    Py_ssize_t res;
+
+    res = sizeof(PyOrderedDictObject);
+    if (mp->ma_table != mp->ma_smalltable)
+        res = res + (mp->ma_mask + 1) * sizeof(PyOrderedDictEntry);
+    return PyInt_FromSsize_t(res);
 }
 
 static PyObject *
@@ -2863,6 +2953,9 @@ PyDoc_STRVAR(reduce__doc__, "Return state information for pickling.");
 
 PyDoc_STRVAR(getitem__doc__, "x.__getitem__(y) <==> x[y]");
 
+PyDoc_STRVAR(sizeof__doc__,
+"D.__sizeof__() -> size of D in memory, in bytes");
+
 PyDoc_STRVAR(get__doc__,
              "D.get(k[,d]) -> D[k] if k in D, else d.  d defaults to None.");
 
@@ -2870,12 +2963,12 @@ PyDoc_STRVAR(setdefault_doc__,
              "D.setdefault(k[,d]) -> D.get(k,d), also set D[k]=d if k not in D");
 
 PyDoc_STRVAR(pop__doc__,
-             "D.pop(k[,d]) -> v, remove specified key and return the corresponding value\n\
+             "D.pop(k[,d]) -> v, remove specified key and return the corresponding value.\n\
 If key is not found, d is returned if given, otherwise KeyError is raised");
 
 PyDoc_STRVAR(popitem__doc__,
              "D.popitem([index]) -> (k, v), remove and return indexed (key, value) pair as a\n\
-2-tuple (default is last); but raise KeyError if D is empty");
+2-tuple (default is last); but raise KeyError if D is empty.");
 
 PyDoc_STRVAR(keys__doc__,
              "D.keys([reverse=False]) -> list of D's keys, optionally reversed");
@@ -2887,8 +2980,10 @@ PyDoc_STRVAR(values__doc__,
              "D.values() -> list of D's values");
 
 PyDoc_STRVAR(update__doc__,
-             "D.update(E, **F) -> None.  Update D from E and F: for k in E: D[k] = E[k]\n\
-(if E has keys else: for (k, v) in E: D[k] = v) then: for k in F: D[k] = F[k]");
+"D.update(E, **F) -> None.  Update D from dict/iterable E and F.\n"
+"If E has a .keys() method, does:     for k in E: D[k] = E[k]\n\
+If E lacks .keys() method, does:     for (k, v) in E: D[k] = v\n\
+In either case, this is followed by: for k in F: D[k] = F[k]");
 
 PyDoc_STRVAR(fromkeys__doc__,
              "dict.fromkeys(S[,v]) -> New dict with keys from S and values equal to v.\n\
@@ -2945,6 +3040,8 @@ static PyMethodDef ordereddict_methods[] = {
         "__getitem__", (PyCFunction)dict_subscript, METH_O | METH_COEXIST,
         getitem__doc__
     },
+    {"__sizeof__",      (PyCFunction)dict_sizeof,       METH_NOARGS,
+     sizeof__doc__},
     {"__reduce__", (PyCFunction)dict_reduce, METH_NOARGS, reduce__doc__},
     {
         "has_key",	(PyCFunction)dict_has_key,      METH_O,
@@ -3218,17 +3315,17 @@ PyDoc_STRVAR(ordereddict_doc,
              "ordereddict() -> new empty dictionary.\n"
              "dict(orderddict) -> new dictionary initialized from a mappings object's\n"
              "    (key, value) pairs.\n"
-//"dict(seq) -> new dictionary initialized as if via:\n"
+//"dict(iterable) -> new dictionary initialized as if via:\n"
 //"    d = {}\n"
-//"    for k, v in seq:\n"
+//"    for k, v in iterable:\n"
 //"        d[k] = v\n"
 //"dict(**kwargs) -> new dictionary initialized with the name=value pairs\n"
 //"    in the keyword argument list.  For example:  dict(one=1, two=2)"
             );
 
 PyTypeObject PyOrderedDict_Type = {
-    PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-    0,
+  /* Review:  drop hash ?? */
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)    
     "_ordereddict.ordereddict",
     sizeof(PyOrderedDictObject),
     0,
@@ -3277,8 +3374,7 @@ PyDoc_STRVAR(sorteddict_doc,
 
 
 PyTypeObject PySortedDict_Type = {
-    PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-    0,
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)    
     "_ordereddict.sorteddict",
     sizeof(PySortedDictObject),
     0,
@@ -3433,8 +3529,7 @@ fail:
 }
 
 PyTypeObject PyOrderedDictIterKey_Type = {
-    PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-    0,					/* ob_size */
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)    
     "_ordereddict.keyiterator",		/* tp_name */
     sizeof(ordereddictiterobject),			/* tp_basicsize */
     0,					/* tp_itemsize */
@@ -3501,8 +3596,7 @@ fail:
 }
 
 PyTypeObject PyOrderedDictIterValue_Type = {
-    PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-    0,					/* ob_size */
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)    
     "_ordereddict.valueiterator",		/* tp_name */
     sizeof(ordereddictiterobject),			/* tp_basicsize */
     0,					/* tp_itemsize */
@@ -3556,6 +3650,7 @@ static PyObject *dictiter_iternextitem(ordereddictiterobject *di)
     if (i < 0)
         goto fail;
 
+    /* review: differs in 2.5.6 */
     if (i >= d->ma_used)
         goto fail;
     epp = d->od_otablep;
@@ -3585,8 +3680,7 @@ fail:
 }
 
 PyTypeObject PyOrderedDictIterItem_Type = {
-    PyObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type))
-    0,					/* ob_size */
+    PyVarObject_HEAD_INIT(&PyType_Type, 0)    
     "_ordereddict.itemiterator",		/* tp_name */
     sizeof(ordereddictiterobject),			/* tp_basicsize */
     0,					/* tp_itemsize */
@@ -3662,6 +3756,8 @@ init_ordereddict(void)
 {
     PyObject *m;
 
+    /* moved here as we have two primitives and dictobject.c had
+       no initialisation function */
     if (dummy == NULL) { /* Auto-initialize dummy */
         dummy = PyString_FromString("<dummy key>");
         if (dummy == NULL)
