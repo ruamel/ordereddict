@@ -2559,9 +2559,9 @@ dict_setdefault(register PyOrderedDictObject *mp, PyObject *args)
         return NULL;
     val = ep->me_value;
     if (val == NULL) {
-        val = failobj;
-        if (PyOrderedDict_SetItem((PyObject*)mp, key, failobj))
-            val = NULL;
+        if (dict_set_item_by_hash_or_entry((PyObject*)mp, key, hash, ep,
+                                           failobj) == 0)
+            val = failobj;
     }
     Py_XINCREF(val);
     return val;
@@ -3090,9 +3090,9 @@ PyDoc_STRVAR(values__doc__,
              "D.values() -> list of D's values");
 
 PyDoc_STRVAR(update__doc__,
-"D.update(E, **F) -> None.  Update D from dict/iterable E and F.\n"
-"If E has a .keys() method, does:     for k in E: D[k] = E[k]\n\
-If E lacks .keys() method, does:     for (k, v) in E: D[k] = v\n\
+"D.update([E,] **F) -> None.  Update D from dict/iterable E and F.\n"
+"If E present and has a .keys() method, does:     for k in E: D[k] = E[k]\n\
+If E present and lacks .keys() method, does:     for (k, v) in E: D[k] = v\n\
 In either case, this is followed by: for k in F: D[k] = F[k]");
 
 PyDoc_STRVAR(fromkeys__doc__,
@@ -3140,6 +3140,20 @@ PyDoc_STRVAR(getstate_doc,
 
 PyDoc_STRVAR(dump_doc,
              "D.dump() -> print internals of an orereddict");
+
+
+/* Forward */
+static PyObject *dictkeys_new(PyObject *);
+static PyObject *dictitems_new(PyObject *);
+static PyObject *dictvalues_new(PyObject *);
+
+PyDoc_STRVAR(viewkeys__doc__,
+             "D.viewkeys() -> a set-like object providing a view on D's keys");
+PyDoc_STRVAR(viewitems__doc__,
+             "D.viewitems() -> a set-like object providing a view on D's items");
+PyDoc_STRVAR(viewvalues__doc__,
+             "D.viewvalues() -> an object providing a view on D's values");
+
 
 static PyMethodDef ordereddict_methods[] = {
     {
