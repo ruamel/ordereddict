@@ -3199,6 +3199,14 @@ static PyMethodDef ordereddict_methods[] = {
         "values",	(PyCFunction)dict_values,	METH_VARARGS | METH_KEYWORDS,
         values__doc__
     },
+    /*
+    {"viewkeys",        (PyCFunction)dictkeys_new,      METH_NOARGS,
+     viewkeys__doc__},
+    {"viewitems",       (PyCFunction)dictitems_new,     METH_NOARGS,
+     viewitems__doc__},
+    {"viewvalues",      (PyCFunction)dictvalues_new,    METH_NOARGS,
+     viewvalues__doc__}, 
+    */
     {
         "update",	(PyCFunction)dict_update,	METH_VARARGS | METH_KEYWORDS,
         update__doc__
@@ -3332,8 +3340,17 @@ dict_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         assert(d->ma_table == NULL && d->od_fill == 0 && d->ma_used == 0);
         INIT_NONZERO_DICT_SLOTS(d);
         d->ma_lookup = lookdict_string;
+        /* The object has been implicitly tracked by tp_alloc */
+        if (type == &PyOrderedDict_Type)
+            _PyObject_GC_UNTRACK(d);
 #ifdef SHOW_CONVERSION_COUNTS
         ++created;
+#endif
+#ifdef SHOW_TRACK_COUNT
+        if (_PyObject_GC_IS_TRACKED(d))
+            count_tracked++;
+        else
+            count_untracked++;
 #endif
     }
     return self;
@@ -3354,8 +3371,16 @@ sorteddict_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         INIT_NONZERO_DICT_SLOTS(d);
         d->ma_lookup = lookdict_string;
         INIT_SORT_FUNCS(((PySortedDictObject *) self));
+        if (type == &PySortedDict_Type)
+            _PyObject_GC_UNTRACK(d);
 #ifdef SHOW_CONVERSION_COUNTS
         ++created;
+#endif
+#ifdef SHOW_TRACK_COUNT
+        if (_PyObject_GC_IS_TRACKED(d))
+            count_tracked++;
+        else
+            count_untracked++;
 #endif
     }
     return self;
