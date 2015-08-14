@@ -589,25 +589,21 @@ insertdict(register PyOrderedDictObject *mp, PyObject *key, long hash,
     return insertdict_by_entry(mp, key, hash, ep, value, index);
 }
 
+/*
+Internal routine to insert a new item into the table when you have entry object.
+Used by insertdict.
+*/
 static int
-insertsorteddict(register PyOrderedDictObject *mp, PyObject *key, long hash,
-                 PyObject *value)
+insertsorteddict_by_entry(register PyOrderedDictObject *mp, PyObject *key, long hash,
+                    PyOrderedDictEntry *ep, PyObject *value)
 {
-    register PyOrderedDictEntry *ep;
-
-    /* printf("insert sorted dict\n"); */
-    assert(mp->ma_lookup != NULL);
-    ep = mp->ma_lookup(mp, key, hash);
-    if (ep == NULL) {
-        Py_DECREF(key);
-        Py_DECREF(value);
-        return -1;
-    }
     PyObject *old_value;
     Py_ssize_t index = 0, lower, upper;
     int res;
     register PySortedDictObject *sd = (PySortedDictObject *) mp;
     register PyOrderedDictEntry **epp = NULL;
+
+    MAINTAIN_TRACKING(mp, key, value);
     if (ep->me_value != NULL) { /* updating a value */
         old_value = ep->me_value;
         ep->me_value = value;
@@ -673,6 +669,23 @@ insertsorteddict(register PyOrderedDictObject *mp, PyObject *key, long hash,
     return 0;
 }
 
+static int
+insertsorteddict(register PyOrderedDictObject *mp, PyObject *key, long hash,
+                 PyObject *value)
+{
+    register PyOrderedDictEntry *ep;
+
+    /* printf("insert sorted dict\n"); */
+    assert(mp->ma_lookup != NULL);
+    ep = mp->ma_lookup(mp, key, hash);
+    if (ep == NULL) {
+        Py_DECREF(key);
+        Py_DECREF(value);
+        return -1;
+    }
+    return insertsorteddict_by_entry(mp, key, hash, ep, value);
+}
+
 
 /*
 Internal routine used by dictresize() to insert an item which is
@@ -692,6 +705,7 @@ insertdict_clean(register PyOrderedDictObject *mp, PyObject *key, long hash,
     PyOrderedDictEntry *ep0 = mp->ma_table;
     register PyOrderedDictEntry *ep;
 
+    MAINTAIN_TRACKING(mp, key, value);
     i = hash & mask;
     ep = &ep0[i];
     for (perturb = hash; ep->me_key != NULL; perturb >>= PERTURB_SHIFT) {
@@ -869,9 +883,11 @@ PyOrderedDict_GetItem(PyObject *op, PyObject *key)
         }
     }
 
-    /* We can arrive here with a NULL tstate during initialization:
-       try running "python -Wi" for an example related to string
-       interning.  Let's just hope that no exception occurs then... */
+    /* We can arrive here with a NULL tstate during initialization: try 
+       running "python -Wi" for an example related to string interning.
+       Let's just hope that no exception occurs then... This must be
+       _PyThreadState_Current and not PyThreadState_GET() because in debug
+       mode, the latter complains if tstate is NULL. */
     tstate = _PyThreadState_Current;
     if (tstate != NULL && tstate->curexc_type != NULL) {
         /* preserve the existing exception */
@@ -892,36 +908,13 @@ PyOrderedDict_GetItem(PyObject *op, PyObject *key)
     return ep->me_value;
 }
 
-/* CAUTION: PyOrderedDict_SetItem() must guarantee that it won't resize the
- * dictionary if it's merely replacing the value for an existing key.
- * This means that it's safe to loop over a dictionary with PyOrderedDict_Next()
- * and occasionally replace a value -- but you can't insert new keys or
- * remove them.
- * This does never hold for kvio
- */
-int
-PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
+static int
+dict_set_item_by_hash_or_entry(register PyObject *op, PyObject *key,
+                               long hash, PyDictEntry *ep, PyObject *value)
 {
     register PyOrderedDictObject *mp;
-    register long hash;
     register Py_ssize_t n_used;
-
-    if (!PyOrderedDict_Check(op)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    assert(key);
-    assert(value);
     mp = (PyOrderedDictObject *)op;
-    if (PyString_CheckExact(key)) {
-        hash = ((PyStringObject *)key)->ob_shash;
-        if (hash == -1)
-            hash = PyObject_Hash(key);
-    } else {
-        hash = PyObject_Hash(key);
-        if (hash == -1)
-            return -1;
-    }
     assert(mp->od_fill <= mp->ma_mask);  /* at least one empty slot */
     n_used = mp->ma_used;
     Py_INCREF(value);
@@ -948,6 +941,36 @@ PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
     if (!(mp->ma_used > n_used && mp->od_fill*3 >= (mp->ma_mask+1)*2))
         return 0;
     return dictresize(mp, (mp->ma_used > 50000 ? 2 : 4) * mp->ma_used);
+}
+
+/* CAUTION: PyOrderedDict_SetItem() must guarantee that it won't resize the
+ * dictionary if it's merely replacing the value for an existing key.
+ * This means that it's safe to loop over a dictionary with PyOrderedDict_Next()
+ * and occasionally replace a value -- but you can't insert new keys or
+ * remove them.
+ * This does never hold for kvio
+ */
+int
+PyOrderedDict_SetItem(register PyObject *op, PyObject *key, PyObject *value)
+{
+    register long hash;
+
+    if (!PyOrderedDict_Check(op)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    assert(key);
+    assert(value);
+    if (PyString_CheckExact(key)) {
+        hash = ((PyStringObject *)key)->ob_shash;
+        if (hash == -1)
+            hash = PyObject_Hash(key);
+    } else {
+        hash = PyObject_Hash(key);
+        if (hash == -1)
+            return -1;
+    }
+    return dict_set_item_by_hash_or_entry(op, key, hash, NULL, value);
 }
 
 int
@@ -1424,6 +1447,7 @@ dict_subscript(PyOrderedDictObject *mp, register PyObject *key)
     if (v == NULL) {
         if (!PyOrderedDict_CheckExact(mp) && !PySortedDict_CheckExact(mp)) {
             /* Look up __missing__ method if we're a subclass. */
+#if PY_VERSION_HEX < 0x02070000
             PyObject *missing;
             static PyObject *missing_str = NULL;
             if (missing_str == NULL)
@@ -1433,6 +1457,21 @@ dict_subscript(PyOrderedDictObject *mp, register PyObject *key)
             if (missing != NULL)
                 return PyObject_CallFunctionObjArgs(missing,
                                                     (PyObject *)mp, key, NULL);
+#else
+            PyObject *missing, *res;
+            static PyObject *missing_str = NULL;
+            missing = _PyObject_LookupSpecial((PyObject *)mp,
+                                              "__missing__",
+                                              &missing_str);
+            if (missing != NULL) {
+                res = PyObject_CallFunctionObjArgs(missing,
+                                                   key, NULL);
+                Py_DECREF(missing);
+                return res;
+            }
+            else if (PyErr_Occurred())
+                return NULL;
+#endif
         }
         set_key_error(key);
         return NULL;
@@ -1809,22 +1848,29 @@ dict_fromkeys(PyObject *cls, PyObject *args)
     if (d == NULL)
         return NULL;
 
-    if ((PyOrderedDict_CheckExact(d) || PySortedDict_CheckExact(d)) && PyAnySet_CheckExact(seq)) {
-        PyOrderedDictObject *mp = (PyOrderedDictObject *)d;
-        Py_ssize_t pos = 0;
-        PyObject *key;
-        long hash;
 
-        if (dictresize(mp, PySet_GET_SIZE(seq)))
-            return NULL;
-
-        while (_PySet_NextEntry(seq, &pos, &key, &hash)) {
-            Py_INCREF(key);
-            Py_INCREF(value);
-            if (insertdict(mp, key, hash, value, -1))
+    if ((PyOrderedDict_CheckExact(d) || PySortedDict_CheckExact(d)) && ((PyDictObject *)d)->ma_used == 0) {
+        if (PyAnySet_CheckExact(seq)) {
+            PyOrderedDictObject *mp = (PyOrderedDictObject *)d;
+            Py_ssize_t pos = 0;
+            PyObject *key;
+            long hash;
+    
+            if (dictresize(mp, PySet_GET_SIZE(seq))) {
+    	    Py_DECREF(d);
                 return NULL;
+            }
+
+            while (_PySet_NextEntry(seq, &pos, &key, &hash)) {
+                Py_INCREF(key);
+                Py_INCREF(value);
+                if (insertdict(mp, key, hash, value, -1)) {
+    	        Py_DECREF(d);
+                    return NULL;
+                }
+            }
+            return d;
         }
-        return d;
     }
 
     it = PyObject_GetIter(seq);
