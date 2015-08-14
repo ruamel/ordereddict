@@ -3298,13 +3298,6 @@ sorteddict_init(PyObject *self, PyObject *args, PyObject *kwds)
     return result;
 }
 
-static long
-dict_nohash(PyObject *self)
-{
-    PyErr_SetString(PyExc_TypeError, "ordereddict objects are unhashable");
-    return -1;
-}
-
 static PyObject *
 dict_iter(PyOrderedDictObject *dict)
 {
@@ -3324,7 +3317,6 @@ PyDoc_STRVAR(ordereddict_doc,
             );
 
 PyTypeObject PyOrderedDict_Type = {
-  /* Review:  drop hash ?? */
     PyVarObject_HEAD_INIT(&PyType_Type, 0)    
     "_ordereddict.ordereddict",
     sizeof(PyOrderedDictObject),
@@ -3338,14 +3330,14 @@ PyTypeObject PyOrderedDict_Type = {
     0,					/* tp_as_number */
     &dict_as_sequence,			/* tp_as_sequence */
     &dict_as_mapping,			/* tp_as_mapping */
-    dict_nohash,				/* tp_hash */
+    (hashfunc)PyObject_HashNotImplemented,  /* tp_hash */
     0,					/* tp_call */
     0,					/* tp_str */
     PyObject_GenericGetAttr,		/* tp_getattro */
     0,					/* tp_setattro */
     0,					/* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-    Py_TPFLAGS_BASETYPE,		/* tp_flags */
+    Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS, /* tp_flags */
     ordereddict_doc,				/* tp_doc */
     dict_traverse,				/* tp_traverse */
     dict_tp_clear,				/* tp_clear */
@@ -3387,14 +3379,14 @@ PyTypeObject PySortedDict_Type = {
     0,					/* tp_as_number */
     &dict_as_sequence,			/* tp_as_sequence */
     &dict_as_mapping,			/* tp_as_mapping */
-    dict_nohash,				/* tp_hash */
+    (hashfunc)PyObject_HashNotImplemented,  /* tp_hash */
     0,					/* tp_call */
     0,					/* tp_str */
     PyObject_GenericGetAttr,		/* tp_getattro */
     0,					/* tp_setattro */
     0,					/* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC |
-    Py_TPFLAGS_BASETYPE,		/* tp_flags */
+    Py_TPFLAGS_BASETYPE | Py_TPFLAGS_DICT_SUBCLASS, /* tp_flags */
     sorteddict_doc,				/* tp_doc */
     dict_traverse,				/* tp_traverse */
     dict_tp_clear,				/* tp_clear */
@@ -3443,6 +3435,7 @@ dictiter_new(PyOrderedDictObject *dict, PyTypeObject *itertype,
                                          kwlist, &reverse))
             return NULL;
 
+    /* review: introduce GC_New */
     di = PyObject_New(ordereddictiterobject, itertype);
     if (di == NULL)
         return NULL;
@@ -3474,6 +3467,14 @@ dictiter_dealloc(ordereddictiterobject *di)
     Py_XDECREF(di->di_dict);
     Py_XDECREF(di->di_result);
     PyObject_Del(di);
+}
+
+static int
+dictiter_traverse(ordereddictiterobject *di, visitproc visit, void *arg)
+{
+    Py_VISIT(di->di_dict);
+    Py_VISIT(di->di_result);
+    return 0;
 }
 
 static PyObject *
@@ -3551,7 +3552,7 @@ PyTypeObject PyOrderedDictIterKey_Type = {
     0,					/* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,			/* tp_flags */
     0,					/* tp_doc */
-    0,					/* tp_traverse */
+    (traverseproc)dictiter_traverse,    /* tp_traverse */
     0,					/* tp_clear */
     0,					/* tp_richcompare */
     0,					/* tp_weaklistoffset */
@@ -3618,7 +3619,7 @@ PyTypeObject PyOrderedDictIterValue_Type = {
     0,					/* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,			/* tp_flags */
     0,					/* tp_doc */
-    0,					/* tp_traverse */
+    (traverseproc)dictiter_traverse,    /* tp_traverse */
     0,					/* tp_clear */
     0,					/* tp_richcompare */
     0,					/* tp_weaklistoffset */
@@ -3702,7 +3703,7 @@ PyTypeObject PyOrderedDictIterItem_Type = {
     0,					/* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,			/* tp_flags */
     0,					/* tp_doc */
-    0,					/* tp_traverse */
+    (traverseproc)dictiter_traverse,    /* tp_traverse */
     0,					/* tp_clear */
     0,					/* tp_richcompare */
     0,					/* tp_weaklistoffset */
