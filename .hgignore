@@ -13,4 +13,8 @@ dist
 MANIFEST
 README
 README.pdf
-venv
+venv26
+venv27
+venv32
+venv33
+venv34

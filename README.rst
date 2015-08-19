@@ -56,12 +56,12 @@ Windows 7 64   Windows SDK for Win7 SP1  2.7.6
 Ubuntu 12.04   gcc 4.6.3                 2.7.3
 Ubuntu  8.04   gcc 4.2.4                 2.6.4
 Ubuntu  8.04   gcc 4.2.4                 2.5.2
-Ubuntu  8.10  gcc 4.3.2                 2.5.4
-Ubuntu  8.10  gcc 4.3.2                 2.4.6
-Ubuntu  7.04  gcc 4.1.2                 2.5.1
-Ubuntu  7.04  gcc 4.1.2                 2.4.4
-Ubuntu  6.06  gcc                       2.5.1
-Windows XP    Visual Studio 2003        2.5.1
+Ubuntu  8.10   gcc 4.3.2                 2.5.4
+Ubuntu  8.10   gcc 4.3.2                 2.4.6
+Ubuntu  7.04   gcc 4.1.2                 2.5.1
+Ubuntu  7.04   gcc 4.1.2                 2.4.4
+Ubuntu  6.06   gcc                       2.5.1
+Windows XP     Visual Studio 2003        2.5.1
 Windows XP     Visual C++ 2008 Express   2.6.5
 Windows        MingGW 4.7.0              2.7.3
 Solaris 10     GCC 4.4.x                 2.7.3
@@ -347,7 +347,8 @@ There you can still find the links for downloading the older version (0.4.5).
 
 History
 -------
-l ``0.4.9  2015-08-10``
+
+| ``0.4.9  2015-08-10``
 | typos fixed by Gianfranco Costamagna
 | 
 | ``0.4.8  2015-05-31``
