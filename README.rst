@@ -35,17 +35,19 @@ This module has been tested under:
 =============  ========================= ==========
 OS             compiler                  Python
 Linux Mint 17  gcc 4.8.4                 2.7.13
+Windows        Visual Studio 2010        2.7.13.32
+Windows        Visual Studio 2010        2.7.13.64
 =============  ========================= ==========
 
 Older versions of this module has been tested under
 and I expect those to still work:
 
-============  ========================= ======
-OS            compiler                  Python
-Windows XP-64  Visual Studio 2008        2.7.10-32
-Windows XP-64  Visual Studio 2008        2.7.10-64
-Windows XP-64  Visual Studio 2010        2.6.9-32
-Windows XP-64  Visual Studio 2010        2.6.9-64
+=============  ========================  =========
+OS             compiler                  Python
+Windows XP-64  Visual Studio 2010        2.7.10-32
+Windows XP-64  Visual Studio 2010        2.7.10-64
+Windows XP-64  Visual Studio 2008        2.6.9-32
+Windows XP-64  Visual Studio 2008        2.6.9-64
 Linux Mint 17  gcc 4.8.2                 2.6.9
 Ubuntu 12.04   gcc 4.7.2                 2.7.6
 Ubuntu 12.04   gcc 4.7.2                 2.6.8
@@ -65,7 +67,7 @@ Windows XP     Visual Studio 2003        2.5.1
 Windows XP     Visual C++ 2008 Express   2.6.5
 Windows        MingGW 4.7.0              2.7.3
 Solaris 10     GCC 4.4.x                 2.7.3
-============  ========================= ======
+=============  ========================  =========
 
 Version 0.4.1 was tested and found working on SuSE Linux Enterprise Server
 (GCC 4.1.0 and Intel C/C++ 10.1) by Stuart Stock.
@@ -348,6 +350,9 @@ There you can still find the links for downloading the older version (0.4.5).
 History
 -------
 
+``0.4.13``: 2017-0723
+-
+
 | ``0.4.9  2015-08-10``
 | typos fixed by Gianfranco Costamagna
 |
@@ -409,4 +414,3 @@ History
 | an email to comp.lang.python about why timing with timeit did seem to
 | be memory hungry ....
 | and then I realised ordereddict had a memory leak %-)
-|
