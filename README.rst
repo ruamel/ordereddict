@@ -34,12 +34,7 @@ This module has been tested under:
 
 =============  ========================= ==========
 OS             compiler                  Python
-Linux Mint 17  gcc 4.8.2                 2.7.10
-Linux Mint 17  gcc 4.8.2                 2.6.9
-Windows XP-64  Visual Studio 2008        2.7.10-32
-Windows XP-64  Visual Studio 2008        2.7.10-64
-Windows XP-64  Visual Studio 2010        2.6.9-32
-Windows XP-64  Visual Studio 2010        2.6.9-64
+Linux Mint 17  gcc 4.8.4                 2.7.13
 =============  ========================= ==========
 
 Older versions of this module has been tested under
@@ -47,6 +42,11 @@ and I expect those to still work:
 
 ============  ========================= ======
 OS            compiler                  Python
+Windows XP-64  Visual Studio 2008        2.7.10-32
+Windows XP-64  Visual Studio 2008        2.7.10-64
+Windows XP-64  Visual Studio 2010        2.6.9-32
+Windows XP-64  Visual Studio 2010        2.6.9-64
+Linux Mint 17  gcc 4.8.2                 2.6.9
 Ubuntu 12.04   gcc 4.7.2                 2.7.6
 Ubuntu 12.04   gcc 4.7.2                 2.6.8
 Ubuntu  8.04   gcc 4.2.4                 2.7.6
@@ -410,5 +410,3 @@ History
 | be memory hungry ....
 | and then I realised ordereddict had a memory leak %-)
 |
-
-

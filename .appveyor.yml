@@ -18,14 +18,15 @@ environment:
 install:
   - |
     %PYTHON%\python.exe -m pip install --upgrade pip
-    %PYTHON%\python.exe -m pip install wheel
+    %PYTHON%\python.exe -m pip install wheel tox
     %PYTHON%\python.exe -m pip list --format columns
 
 # only used when compiling (for Python with C extensions this is done in the after_test)
 build: off
 
 test_script:
-  - echo Skipped for now
+  - |
+    build.cmd %PYTHON%\tox.exe -e py27
 
 after_test:
   - |

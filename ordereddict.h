@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
+#ifdef _MSC_VER || defined __CYGWIN__
 #undef PyAPI_FUNC
 #undef PyAPI_DATA
 #define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
@@ -16,12 +16,12 @@ extern "C" {
 */
 /*
 
-  This file has been directly derived from dictobject.h in the Python 2.5.1 
-  source distribution. Its licensing therefore   is governed by the license 
+  This file has been directly derived from dictobject.h in the Python 2.5.1
+  source distribution. Its licensing therefore   is governed by the license
   as distributed with Python 2.5.1 available in the
   file LICNESE in the source distribution of ordereddict
-  
-  Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007  Python Software 
+
+  Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007  Python Software
   Foundation; All Rights Reserved"
 
   2007-10-13: Anthon van der Neut
@@ -127,7 +127,7 @@ struct _ordereddictobject {
 	PyOrderedDictEntry *(*ma_lookup)(PyOrderedDictObject *mp, PyObject *key, long hash);
 	PyOrderedDictEntry ma_smalltable[PyOrderedDict_MINSIZE];
 	/* for small arrays, ordered table pointer points to small array of tables */
-	PyOrderedDictEntry **od_otablep; 
+	PyOrderedDictEntry **od_otablep;
 	PyOrderedDictEntry *ma_smallotablep[PyOrderedDict_MINSIZE];
 	/* for storing kvio, relaxed bits */
     long od_state;
