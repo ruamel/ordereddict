@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER || defined __CYGWIN__
+#if defined _MSC_VER || defined __CYGWIN__
 #undef PyAPI_FUNC
 #undef PyAPI_DATA
 #define PyAPI_FUNC(RTYPE) __declspec(dllexport) RTYPE
