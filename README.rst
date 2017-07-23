@@ -56,12 +56,12 @@ Windows 7 64   Windows SDK for Win7 SP1  2.7.6
 Ubuntu 12.04   gcc 4.6.3                 2.7.3
 Ubuntu  8.04   gcc 4.2.4                 2.6.4
 Ubuntu  8.04   gcc 4.2.4                 2.5.2
-Ubuntu  8.10  gcc 4.3.2                 2.5.4
-Ubuntu  8.10  gcc 4.3.2                 2.4.6
-Ubuntu  7.04  gcc 4.1.2                 2.5.1
-Ubuntu  7.04  gcc 4.1.2                 2.4.4
-Ubuntu  6.06  gcc                       2.5.1
-Windows XP    Visual Studio 2003        2.5.1
+Ubuntu  8.10   gcc 4.3.2                 2.5.4
+Ubuntu  8.10   gcc 4.3.2                 2.4.6
+Ubuntu  7.04   gcc 4.1.2                 2.5.1
+Ubuntu  7.04   gcc 4.1.2                 2.4.4
+Ubuntu  6.06   gcc                       2.5.1
+Windows XP     Visual Studio 2003        2.5.1
 Windows XP     Visual C++ 2008 Express   2.6.5
 Windows        MingGW 4.7.0              2.7.3
 Solaris 10     GCC 4.4.x                 2.7.3
@@ -80,8 +80,8 @@ https://bitbucket.org/ruamel/ordereddict is ordereddict's home on the web.
 
 Clone the repository there if you want to work from the source.
 
-http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
-ordereddict's home on the web.  
+http://www.xs4all.nl/~anthon/Python/ordereddict used to be
+ordereddict's home on the web.
 There you can still find the links for downloading the older version (0.4.5).
 
 
@@ -211,9 +211,9 @@ Testing
 -------
 
 testordereddict.py in the test subdirectory has been used to test the module.
-You can use:
+You can use::
 
-   python testordereddict
+  python testordereddict
 
 to run the tests (py.test support has been dropped as newer versions
 of py.test were not compatible).
@@ -223,8 +223,8 @@ routines included as well, it fails on the _update test however
 because the default is not to use a relaxed ordereddict.
 You can run it with::
 
-   cd test/unit
-   python test_dict.py
+  cd test/unit
+  python test_dict.py
 
 To Do
 -----
@@ -339,7 +339,7 @@ order of key-value pairs so that comparing files is difficult with
 Older versions
 --------------
 
-http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
+http://www.xs4all.nl/~anthon/Python/ordereddict used to be
 ordereddict's home on the web.
 
 There you can still find the links for downloading the older version (0.4.5).
@@ -347,9 +347,10 @@ There you can still find the links for downloading the older version (0.4.5).
 
 History
 -------
-l ``0.4.9  2015-08-10``
+
+| ``0.4.9  2015-08-10``
 | typos fixed by Gianfranco Costamagna
-| 
+|
 | ``0.4.8  2015-05-31``
 | dependent on ruamel.base
 | version number in a single place

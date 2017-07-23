@@ -104,7 +104,11 @@ it's two-thirds full.
 */
 typedef struct _ordereddictobject PyOrderedDictObject;
 struct _ordereddictobject {
+#if PY_MAJOR_VERSION < 3
 	PyObject_HEAD
+#else
+	PyObject_VAR_HEAD
+#endif
 	Py_ssize_t od_fill;  /* # Active + # Dummy */
 	Py_ssize_t ma_used;  /* # Active */
 
@@ -140,19 +144,29 @@ struct _sorteddictobject {
 
 PyAPI_DATA(PyTypeObject) PyOrderedDict_Type;
 PyAPI_DATA(PyTypeObject) PySortedDict_Type;
+#if PY_VERSION_HEX >= 0x02070000
+PyAPI_DATA(PyTypeObject) PyOrderedDictIterKey_Type;
+PyAPI_DATA(PyTypeObject) PyOrderedDictIterValue_Type;
+PyAPI_DATA(PyTypeObject) PyOrderedDictIterItem_Type;
+#endif
+PyAPI_DATA(PyTypeObject) PyOrderedDictKeys_Type;
+PyAPI_DATA(PyTypeObject) PyOrderedDictItems_Type;
+PyAPI_DATA(PyTypeObject) PyOrderedDictValues_Type;
 
 #if PY_VERSION_HEX >= 0x02080000
   /* AvdN: this might need reviewing for > 2.7 */
   #define PyOrderedDict_Check(op) \
-                 PyType_FastSubclass(Py_Type(op), Py_TPFLAGS_DICT_SUBCLASS)
+                 PyType_FastSubclass(Py_TYPE(op), Py_TPFLAGS_DICT_SUBCLASS)
   #define PySortedDict_Check(op) \
-                 PyType_FastSubclass(Py_Type(op), Py_TPFLAGS_DICT_SUBCLASS)
+                 PyType_FastSubclass(Py_TYPE(op), Py_TPFLAGS_DICT_SUBCLASS)
+  #define PyOrderedDict_CheckExact(op) (Py_TYPE(op) == &PyOrderedDict_Type)
+  #define PySortedDict_CheckExact(op) (Py_TYPE(op) == &PySortedDict_Type)
 #else
   #define PyOrderedDict_Check(op) PyObject_TypeCheck(op, &PyOrderedDict_Type)
   #define PySortedDict_Check(op) PyObject_TypeCheck(op, &PySortedDict_Type)
+  #define PyOrderedDict_CheckExact(op) ((op)->ob_type == &PyOrderedDict_Type)
+  #define PySortedDict_CheckExact(op) ((op)->ob_type == &PySortedDict_Type)
 #endif
-#define PyOrderedDict_CheckExact(op) ((op)->ob_type == &PyOrderedDict_Type)
-#define PySortedDict_CheckExact(op) ((op)->ob_type == &PySortedDict_Type)
 
 PyAPI_FUNC(PyObject *) PyOrderedDict_New(void);
 PyAPI_FUNC(PyObject *) PyOrderedDict_GetItem(PyObject *mp, PyObject *key);
@@ -170,6 +184,8 @@ PyAPI_FUNC(Py_ssize_t) PyOrderedDict_Size(PyObject *mp);
 PyAPI_FUNC(PyObject *) PyOrderedDict_Copy(PyObject *mp);
 PyAPI_FUNC(int) PyOrderedDict_Contains(PyObject *mp, PyObject *key);
 PyAPI_FUNC(int) _PyOrderedDict_Contains(PyObject *mp, PyObject *key, long hash);
+PyAPI_FUNC(PyObject *) _PyOrderedDict_NewPresized(Py_ssize_t minused);
+PyAPI_FUNC(void) _PyOrderedDict_MaybeUntrack(PyObject *mp);
 
 /* PyOrderedDict_Update(mp, other) is equivalent to PyOrderedDict_Merge(mp, other, 1). */
 PyAPI_FUNC(int) PyOrderedDict_Update(PyObject *mp, PyObject *other);
