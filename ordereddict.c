@@ -4258,13 +4258,15 @@ dictview_repr(dictviewobject *dv)
 {
     PyObject *seq;
     PyObject *result;
+#if PY_MAJOR_VERSION < 3
+    PyObject *seq_str;
+#endif
 
     seq = PySequence_List((PyObject *)dv);
     if (seq == NULL)
         return NULL;
 
 #if PY_MAJOR_VERSION < 3
-    PyObject *seq_str;
     seq_str = PyObject_Repr(seq);
     if (seq_str == NULL) {
         Py_DECREF(seq);
