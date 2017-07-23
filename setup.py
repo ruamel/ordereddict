@@ -123,9 +123,7 @@ And some more (see README.rst).
 
 
 def main():
-    install_requires = [
-            'ruamel.base',
-        ]
+    install_requires = []
     packages = [full_package_name] + [(full_package_name + '.' + x) for x
                                      in find_packages(exclude=['tests'])]
 
@@ -134,9 +132,7 @@ def main():
         version=version_str,
         description='a version of dict that keeps keys in '\
                     'insertion resp. sorted order',
-        install_requires=[
-        ],
-        #install_requires=install_requires,
+        install_requires=install_requires,
         long_description=open('README.rst').read(),
         url='https://bitbucket.org/ruamel/' + package_name,
         author='Anthon van der Neut',

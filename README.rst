@@ -80,8 +80,8 @@ https://bitbucket.org/ruamel/ordereddict is ordereddict's home on the web.
 
 Clone the repository there if you want to work from the source.
 
-http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
-ordereddict's home on the web.  
+http://www.xs4all.nl/~anthon/Python/ordereddict used to be
+ordereddict's home on the web.
 There you can still find the links for downloading the older version (0.4.5).
 
 
@@ -211,9 +211,9 @@ Testing
 -------
 
 testordereddict.py in the test subdirectory has been used to test the module.
-You can use:
+You can use::
 
-   python testordereddict
+  python testordereddict
 
 to run the tests (py.test support has been dropped as newer versions
 of py.test were not compatible).
@@ -223,8 +223,8 @@ routines included as well, it fails on the _update test however
 because the default is not to use a relaxed ordereddict.
 You can run it with::
 
-   cd test/unit
-   python test_dict.py
+  cd test/unit
+  python test_dict.py
 
 To Do
 -----
@@ -339,7 +339,7 @@ order of key-value pairs so that comparing files is difficult with
 Older versions
 --------------
 
-http://www.xs4all.nl/~anthon/Python/ordereddict used to be 
+http://www.xs4all.nl/~anthon/Python/ordereddict used to be
 ordereddict's home on the web.
 
 There you can still find the links for downloading the older version (0.4.5).
@@ -350,7 +350,7 @@ History
 
 | ``0.4.9  2015-08-10``
 | typos fixed by Gianfranco Costamagna
-| 
+|
 | ``0.4.8  2015-05-31``
 | dependent on ruamel.base
 | version number in a single place
