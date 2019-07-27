@@ -1,20 +1,6 @@
+
 syntax: glob
 
-*.pyc
-*~
-*.bak
-*.o
-*.orig
-build
 tmp
-dist
-*.egg-info
-.tox
 MANIFEST
 README
-README.pdf
-venv26
-venv27
-venv32
-venv33
-venv34

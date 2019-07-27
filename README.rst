@@ -35,8 +35,8 @@ This module has been tested under:
 =============  ========================= ==========
 OS             compiler                  Python
 Linux Mint 17  gcc 4.8.4                 2.7.13
-Windows        Visual Studio 2010        2.7.13.32
-Windows        Visual Studio 2010        2.7.13.64
+Windows        Visual Studio 2010        2.7.13-32
+Windows        Visual Studio 2010        2.7.13-64
 =============  ========================= ==========
 
 Older versions of this module has been tested under
