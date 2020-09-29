@@ -350,9 +350,12 @@ There you can still find the links for downloading the older version (0.4.5).
 History
 -------
 
-``0.4.13``: 2017-0723
--
-
+| ``0.4.15``: 2020-09-29
+| fix loading name collision on example "moduleinit" function name
+|
+| ``0.4.13``: 2017-07-23
+|
+|
 | ``0.4.9  2015-08-10``
 | typos fixed by Gianfranco Costamagna
 |

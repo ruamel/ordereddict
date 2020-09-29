@@ -1,8 +1,9 @@
 
 UTILNAME:=ordereddict
 PKGNAME:=ruamel.$(UTILNAME)
+P:=/opt/python/2/bin/python
 #VERSION:=$$(python setup.py --version)
-VERSION:=$(shell python setup.py --version)
+VERSION:=$(shell $P setup.py --version)
 REGEN:=/usr/local/bin/ruamel_util_new util --published OrderedDict --skip-util --skip-hg
 
 include ~/.config/ruamel_util_new/Makefile.inc

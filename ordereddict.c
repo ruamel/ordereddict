@@ -4632,8 +4632,8 @@ dictvalues_new(PyObject *dict)
 #endif
 
 
-PyObject *
-moduleinit(void)
+static PyObject *
+ruamel_ordereddict_moduleinit(void)
 {
     PyObject *m;
 
@@ -4695,11 +4695,11 @@ moduleinit(void)
 #if PY_MAJOR_VERSION < 3
     PyMODINIT_FUNC init_ordereddict(void)
     {
-        moduleinit();
+        ruamel_ordereddict_moduleinit();
     }
 #else
     PyMODINIT_FUNC PyInit__ordereddict(void)
     {
-        return moduleinit();
+        return ruamel_ordereddict_moduleinit();
     }
 #endif
